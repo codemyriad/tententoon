@@ -4,6 +4,7 @@
   import LogPanel from './components/LogPanel.svelte';
   import RotatedLogPanel from './components/RotatedLogPanel.svelte';
   import EscherPanel from './components/EscherPanel.svelte';
+  import EscherZoomPanel from './components/EscherZoomPanel.svelte';
   import ZoomPreview from './components/ZoomPreview.svelte';
   import { imageState, loadImageFromUrl, restoreLastSession } from './lib/stores/image.svelte';
   import { identityOf, readRect } from './lib/persistence';
@@ -61,6 +62,10 @@
 
   <div class="row">
     <EscherPanel />
+  </div>
+
+  <div class="row">
+    <EscherZoomPanel />
   </div>
 
   <div class="row">
