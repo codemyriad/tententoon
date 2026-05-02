@@ -1,4 +1,27 @@
 <script lang="ts">
+  /**
+   * Panel 2 — log(z − c) rotated.
+   *
+   * The diagonal of the (logS, 2π) lattice from the previous panel is the
+   * vector (logS, 2π); rotating (u, v) by
+   *
+   *     β = atan(logS / 2π)
+   *
+   * sends that diagonal onto the +v' axis, with length L = √(logS² + 4π²).
+   * After rotation the image tiles vertically with period L, so a canvas
+   * that is exactly L tall has matching top and bottom rows — one Droste
+   * step is one upward tile.
+   *
+   * This is a PURE rotation. The proper Lenstra step is multiplication of
+   * log by c̃ = 2πi/(logS + 2πi), which is the same rotation but ALSO a
+   * scaling by |c̃| = 2π/L. So applying exp here doesn't quite produce the
+   * Escher panel — the angles are right, the radial scaling isn't. The
+   * rotated view exists to make the geometry obvious side-by-side.
+   *
+   * Inverse map: (u', v') is the pixel; un-rotate by −β to get (u, v) in
+   * the original log frame, then sample as in panel 1.
+   */
+
   import { imageState } from '../lib/stores/image.svelte';
   import { selectionState } from '../lib/stores/selection.svelte';
   import { drosteGeometry } from '../lib/math/droste';
@@ -6,7 +29,7 @@
 
   const W = 840;
   const H = 280;
-  const N_PERIODS = 3;
+  const N_PERIODS = 3;  // number of u-direction Droste copies to fill horizontally
 
   let canvas: HTMLCanvasElement | null = $state(null);
 
@@ -17,49 +40,38 @@
     return drosteGeometry({ width: src.width, height: src.height }, r);
   });
 
-  const uRange = $derived.by(() => {
-    const src = imageState.source;
-    const g = geom;
-    if (!src || !g) return null;
-    const rMax = maxCornerRadius(src.width, src.height, g.limit.x, g.limit.y);
-    const uMax = Math.log(Math.max(rMax, 1));
-    const uMin = uMax - N_PERIODS * g.logS;
-    return { uMin, uMax, rMax };
-  });
-
   $effect(() => {
     const src = imageState.source;
     const g = geom;
-    const ur = uRange;
-    if (!src || !g || !ur || !canvas) return;
+    if (!src || !g || !canvas) return;
 
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Rotate (u, v) space by a = atan(logS / 2π) so the Droste-repeat vector
-    // (logS, 2π) lands on the v'-axis with length L. In the display, v' is
-    // vertical → the Droste repeat runs top-to-bottom.
-    const a = Math.atan2(g.logS, 2 * Math.PI);
-    const cosA = Math.cos(a);
-    const sinA = Math.sin(a);
+    // Rotation: β = atan(logS / 2π). The diagonal lattice vector (logS, 2π)
+    // rotates onto (0, L) with L = √(logS² + 4π²) — purely vertical.
+    const beta = Math.atan2(g.logS, 2 * Math.PI);
+    const cosB = Math.cos(beta);
+    const sinB = Math.sin(beta);
     const L = Math.hypot(g.logS, 2 * Math.PI);
 
     const cx = g.limit.x;
     const cy = g.limit.y;
-    const uSpan = ur.uMax - ur.uMin;
-    const droste = { cx, cy, logS: g.logS, rMax: ur.rMax };
+    const rMax = maxCornerRadius(src.width, src.height, cx, cy);
+    const uMin = Math.log(Math.max(rMax, 1)) - N_PERIODS * g.logS;
+    const uSpan = N_PERIODS * g.logS;
+    const droste = { cx, cy, logS: g.logS, rMax };
 
     const out = ctx.createImageData(W, H);
     renderMappedDroste(out, src.pixels, droste, (px, py, s) => {
-      // Horizontal: u' log-radius axis in the rotated frame.
-      // Vertical: v' ∈ [-L/2, L/2] — exactly one Droste period.
-      const uPrime = ur.uMin + (px / (W - 1)) * uSpan;
+      // (u', v') in the rotated frame. Canvas is exactly L tall → one period.
+      const uPrime = uMin + (px / (W - 1)) * uSpan;
       const vPrime = -L / 2 + (py / (H - 1)) * L;
-      // Inverse-rotate to the plain log frame: (u, v) = R(-a) · (u', v')
-      const u = uPrime * cosA + vPrime * sinA;
-      const v = -uPrime * sinA + vPrime * cosA;
+      // Inverse rotation by −β: (u, v) = R(−β) · (u', v').
+      const u = uPrime * cosB + vPrime * sinB;
+      const v = -uPrime * sinB + vPrime * cosB;
       const r = Math.exp(u);
       s.x = cx + r * Math.cos(v);
       s.y = cy + r * Math.sin(v);
@@ -67,9 +79,7 @@
     });
     ctx.putImageData(out, 0, 0);
 
-    // The canvas is exactly one Droste period tall: top and bottom rows show
-    // the same source pixels. Draw a subtle marker at the vertical midline
-    // (v' = 0) as a reference for where the rotation-free horizon sits.
+    // Reference midline at v' = 0: where the un-rotated angle horizon sits.
     ctx.strokeStyle = 'rgba(255, 184, 92, 0.35)';
     ctx.setLineDash([4, 4]);
     ctx.lineWidth = 1;
@@ -83,18 +93,18 @@
 
 <section class="panel">
   <header>
-    <h2>log(z − c), rotated by α</h2>
+    <h2>log(z − c), rotated by β</h2>
     {#if geom}
-      {@const a = Math.atan2(geom.logS, 2 * Math.PI)}
+      {@const beta = Math.atan2(geom.logS, 2 * Math.PI)}
       {@const L = Math.hypot(geom.logS, 2 * Math.PI)}
       <div class="chips mono">
-        <span class="chip" title="Droste rotation angle">
-          α = {(a * 180 / Math.PI).toFixed(2)}°
+        <span class="chip" title="Rotation angle">
+          β = {(beta * 180 / Math.PI).toFixed(2)}°
         </span>
-        <span class="chip" title="tan α = logS / 2π">
-          tan α = logS / 2π = {(geom.logS / (2 * Math.PI)).toFixed(3)}
+        <span class="chip" title="tan β = logS / 2π">
+          tan β = logS / 2π = {(geom.logS / (2 * Math.PI)).toFixed(3)}
         </span>
-        <span class="chip" title="Vertical Droste period after rotation">
+        <span class="chip" title="Vertical period after rotation">
           period = L = {L.toFixed(3)}
         </span>
       </div>
@@ -102,11 +112,13 @@
   </header>
   <canvas bind:this={canvas} style="width: {W}px; max-width: 100%; height: auto;"></canvas>
   <p class="muted hint">
-    Same log strip, rotated by α = atan(logS / 2π). After the rotation, the
-    Droste lattice vector (logS, 2π) stands along the vertical with length
-    L = √(logS² + 4π²); the canvas is exactly one period tall, so top and
-    bottom rows coincide. Apply exp to this strip and it winds into the
-    Escher spiral below.
+    Same log strip rotated by β = atan(logS / 2π). The diagonal lattice
+    vector (logS, 2π) now stands purely vertical with length L = √(logS² + 4π²);
+    the canvas is exactly L tall, so top and bottom rows coincide. This is
+    a pure rotation — applying exp would give an almost-Escher (angles
+    right, radial scaling off). The proper Lenstra step in the next panel
+    multiplies log by 2πi/(logS + 2πi) instead, which is the same rotation
+    PLUS a scaling by 2π/L.
   </p>
 </section>
 
@@ -124,9 +136,7 @@
     gap: 1rem;
     flex-wrap: wrap;
   }
-  h2 {
-    margin: 0;
-  }
+  h2 { margin: 0; }
   canvas {
     display: block;
     border: 1px solid var(--border);

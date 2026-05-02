@@ -1,18 +1,37 @@
+/**
+ * Droste geometry: the data we extract from the user's "self-similar
+ * rectangle" choice on the source image.
+ *
+ * The user picks a rectangle (x, y, w, h) inside a (W, H) image. We treat
+ * the image as if it were Droste-self-similar: the inner rectangle holds a
+ * shrunk copy of the whole image, which holds an even smaller copy in its
+ * inner rectangle, and so on forever. The shrink map is
+ *
+ *     f(p) = (x, y) + p / S,   S = W / w   (image-aspect-locked, so H/h = S too)
+ *
+ * It has a unique fixed point — the limit point c of the Droste — found by
+ * solving f(c) = c:
+ *
+ *     c = (x, y) · S / (S − 1)
+ *
+ * In log polar coords around c, scaling by S is a horizontal shift by
+ * logS, and a full revolution is a vertical shift by 2π. That rectangular
+ * (logS, 2π) lattice is the central object the visualisation pipeline
+ * reveals.
+ */
+
 export type Rect = { x: number; y: number; w: number; h: number };
 export type Point = { x: number; y: number };
 
 export type DrosteGeometry = {
+  /** Linear shrink factor S = W/w. */
   S: number;
+  /** ln S — horizontal lattice period in log space. */
   logS: number;
+  /** Limit point: the fixed point of the shrink map (in source pixel coords). */
   limit: Point;
-  alphaEscher: { re: number; im: number };
 };
 
-/**
- * For an image of size (W, H) with an inner self-similar rectangle (x, y, w, h),
- * the shrink map f(p) = rect.topLeft + p / S has a unique fixed point (limit point).
- * c = x · S / (S - 1),  S = W / w
- */
 export function drosteGeometry(
   image: { width: number; height: number },
   rect: Rect
@@ -21,13 +40,7 @@ export function drosteGeometry(
   const logS = Math.log(S);
   const k = S / (S - 1);
   const limit: Point = { x: rect.x * k, y: rect.y * k };
-  const twoPi = 2 * Math.PI;
-  const denom = twoPi * twoPi;
-  const alphaEscher = {
-    re: (twoPi * twoPi) / denom,
-    im: (twoPi * logS) / denom
-  };
-  return { S, logS, limit, alphaEscher };
+  return { S, logS, limit };
 }
 
 /** Clamp a rectangle (aspect-locked to image aspect) so it stays inside the image. */
@@ -40,8 +53,8 @@ export function clampRect(
   const aspect = image.width / image.height;
   const minW = image.width / maxS;
   const maxW = image.width / minSFactor;
-  let w = Math.max(minW, Math.min(maxW, rect.w));
-  let h = w / aspect;
+  const w = Math.max(minW, Math.min(maxW, rect.w));
+  const h = w / aspect;
   const x = Math.max(0, Math.min(image.width - w, rect.x));
   const y = Math.max(0, Math.min(image.height - h, rect.y));
   return { x, y, w, h };

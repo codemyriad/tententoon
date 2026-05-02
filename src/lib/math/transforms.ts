@@ -1,22 +1,33 @@
 /**
- * Pure sampling helpers for the Droste pipeline visualisation.
+ * Sampling helpers for the Droste visualisation pipeline.
  *
- * Pipeline stages (all sampled by inverting the forward map in each output
- * pixel, so that every output pixel gets filled regardless of how the source
- * folds onto itself):
+ * Every panel renders by an INVERSE map: for each output pixel we ask
+ * "what point in the source did this come from?", then bilinearly sample
+ * the source there. This guarantees every output pixel is covered (a
+ * forward map would leave holes wherever the forward map stretched).
  *
- *   1. log(z - c)              → log panel
- *   2. rotate log by angle a   → rotated-log panel  (a = atan(logS / 2π))
- *   3. complex-power (z-c)^α   → Escher panel        (α = 1 - i·logS/2π)
+ * The pipeline stages, all rendered this way:
  *
- * The rotated-log panel is a pure rotation in log-space — applying exp to it
- * won't perfectly match the Escher panel (which also picks up a scale factor
- * |α|), but the three together make the geometry obvious.
+ *   1. log(z − c)              — log panel
+ *   2. rotate (u, v) by atan(logS / 2π) — rotated-log panel
+ *   3. (z − c)^α  with α = 1 − i·logS/(2π) — Escher panel
+ *
+ * The rotated-log panel is illustrative: it's a PURE rotation of log
+ * space, not the full multiplication by 2πi/(logS + 2πi) the Lenstra
+ * construction needs. Applying exp to it won't quite match the Escher
+ * panel (the rotation is right but a scale factor is missing). Showing
+ * the three side by side still makes the geometry obvious.
+ *
+ * The source image is, of course, NOT actually Droste-invariant — it's
+ * just a photo. We FAKE invariance with `sampleDroste`, which folds any
+ * candidate sample point back into the outermost ring of the image by
+ * scaling around c. The result is what the picture would look like if it
+ * really were a Droste fractal.
  */
 
 export type Pixels = ImageData;
 
-/** Bilinear sample. Returns the RGBA channels (0..255) at (x, y) in pixel space. */
+/** Bilinear sample of the source at (x, y) in pixel space. Out-of-bounds → transparent black. */
 export function sample(
   src: Pixels,
   x: number,
@@ -51,10 +62,9 @@ export function sample(
 }
 
 /**
- * Fill a (w×h) output buffer by applying `mapInv` to each output pixel: the
- * function receives (px, py) in output-canvas pixel coords and writes the
- * corresponding source image coord into `src`. Skip writing `src` (return
- * false) to leave that output pixel black/transparent.
+ * Render `out` by inverse mapping. For each output pixel (px, py), the
+ * caller's `mapInv` writes the corresponding source coord into `s`; we
+ * sample the source there. Returning false leaves the output pixel blank.
  */
 export function renderMapped(
   out: ImageData,
@@ -85,23 +95,23 @@ export function renderMapped(
 }
 
 /**
- * Droste self-similarity context: image is assumed invariant under
- * p → c + S·(p − c), i.e. scaling by S around the limit point c.
+ * Droste self-similarity context: we PRETEND the source image is invariant
+ * under p → c + S·(p − c), i.e. scaling by S around c. `rMax` is the
+ * largest radius from c we treat as "still inside the image".
  */
 export type DrosteCtx = {
   cx: number;
   cy: number;
   logS: number;
-  /** Largest radius from c that we will accept as "inside the image"; use max corner distance. */
   rMax: number;
 };
 
 /**
- * Droste-wrapped sampling. Given a candidate source point (sx, sy) — which may
- * be outside the image, or so close to c that the image is just a blur — scale
- * (sx − c, sy − c) by S^n (n ∈ Z) until the resulting point is inside the image.
- * Among valid n we pick the one giving the largest radius, so every output
- * pixel draws from the richest, outermost equivalent copy.
+ * Sample the (faked) Droste tiling. A candidate source point (sx, sy) may
+ * be outside the image, or so close to c that there's nothing to see; we
+ * scale (sx − c, sy − c) by S^n until it lands in bounds. Among valid n
+ * we pick the one with the largest radius — that's the outermost,
+ * sharpest equivalent copy.
  */
 export function sampleDroste(
   src: Pixels,
@@ -119,7 +129,8 @@ export function sampleDroste(
     out[0] = 0; out[1] = 0; out[2] = 0; out[3] = 0;
     return false;
   }
-  // Largest n such that r·exp(n·logS) ≤ rMax; start there and walk inward.
+  // Largest n with r·exp(n·logS) ≤ rMax. Walk inward from there until the
+  // scaled point is inside the image rectangle.
   const n0 = Math.floor((Math.log(ctx.rMax) - Math.log(r)) / ctx.logS);
   for (let dn = 0; dn <= 10; dn++) {
     const n = n0 - dn;
@@ -134,7 +145,7 @@ export function sampleDroste(
   return false;
 }
 
-/** Like renderMapped, but samples through sampleDroste so the infinite tiling fills every output pixel. */
+/** Like `renderMapped`, but routes every source lookup through Droste folding. */
 export function renderMappedDroste(
   out: ImageData,
   pixels: Pixels,
@@ -163,7 +174,7 @@ export function renderMappedDroste(
   }
 }
 
-/** Largest |corner − c| for the given image size — used as rMax in Droste wrap. */
+/** Largest |corner − c| for the given image — the outer radius of the source disk. */
 export function maxCornerRadius(
   imageWidth: number,
   imageHeight: number,
