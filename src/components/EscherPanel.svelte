@@ -29,9 +29,13 @@
    *
    *     source angle = Φ − k·(lnR − lnR₀)
    *
-   * Default: distance from c to the centre of the user's selected
-   * rectangle. That puts the un-twisted reading right where the eye
-   * naturally lands. Other choices just rotate the whole panel.
+   * Default: R₀ = rMax / √S, the GEOMETRIC MEAN of the outer rim
+   * (rMax) and the inner Droste ring (rMax/S) — i.e. the middle of one
+   * Droste period in log-radius. This is well-defined for any rectangle
+   * placement and lands the upright reading right in the middle of the
+   * picture's annulus. (Tempting but wrong: distance from c to the rect
+   * centre — that's identically 0 for any centred rect, since c is
+   * always exactly at the rect's centre when the rect is centred.)
    */
 
   import { imageState } from '../lib/stores/image.svelte';
@@ -62,16 +66,17 @@
   });
 
   // R₀: reference radius where the source reads upright.
-  // We pick the centre of the selected rectangle — its distance from c is
-  // a "typical" radius for the picture, so the un-twisted view lands on
-  // the part of the photo the user just framed.
+  // Geometric mean of the inner ring (rMax/S) and the outer rim (rMax),
+  // i.e. lnR₀ = ln(rMax) − logS/2 — the middle of one Droste period in
+  // log-radius. The picture's content sits in that annulus, so cancelling
+  // the twist in its middle leaves the smallest residual rotation across
+  // the image.
   const refR = $derived.by(() => {
-    const r = selectionState.rect;
+    const src = imageState.source;
     const g = geom;
-    if (!r || !g) return null;
-    const rectCx = r.x + r.w / 2;
-    const rectCy = r.y + r.h / 2;
-    return Math.hypot(rectCx - g.limit.x, rectCy - g.limit.y);
+    if (!src || !g) return null;
+    const rMax = maxCornerRadius(src.width, src.height, g.limit.x, g.limit.y);
+    return rMax / Math.sqrt(g.S);
   });
 
   $effect(() => {
@@ -145,7 +150,7 @@
       <div class="chips mono">
         <span class="chip" title="Escher exponent">α = 1 − {k.toFixed(3)}i</span>
         <span class="chip" title="|α| = √(1 + k²)">|α| = {Math.sqrt(1 + k * k).toFixed(3)}</span>
-        <span class="chip" title="Reference radius — source is upright here">
+        <span class="chip" title="Reference radius (rMax/√S) — source reads upright at this radius">
           R₀ = {refR.toFixed(0)} px
         </span>
       </div>
@@ -157,8 +162,8 @@
     with α = 1 − i·logS/(2π). Going CCW around c once shifts the source
     log by exactly (logS, 2π) — one full Droste step — so the picture
     winds into itself: each lap is one zoom level deeper. The map twists
-    the source angle by k·lnR; we cancel that twist at the reference
-    radius R₀ (centre of the selected rectangle), so the photo reads
+    the source angle by k·lnR; we cancel that twist at R₀ = rMax/√S
+    (the middle of one Droste period in log-radius), so the photo reads
     upright there and progressively more wound inward / outward as you
     leave R₀.
   </p>
