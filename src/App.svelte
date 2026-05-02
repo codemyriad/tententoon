@@ -14,23 +14,21 @@
   const EXAMPLE_PRESET = { x: 300, y: 297, w: 680, h: 510 };
   const LOCAL_URL = '/droste-image.jpg';
 
-  let usingExample = $state(false);
+  // Derived from the loaded image — single source of truth for whether the
+  // attribution footer should show. Replaces a manually-maintained boolean
+  // that had to be set in three branches of the loader.
+  const usingExample = $derived(imageState.source?.url === EXAMPLE_URL);
 
   $effect(() => {
     if (imageState.source || imageState.loading) return;
     (async () => {
-      if (await restoreLastSession()) {
-        usingExample = imageState.source?.url === EXAMPLE_URL;
-        return;
-      }
+      if (await restoreLastSession()) return;
       // Prefer a local (gitignored) image if present; otherwise the committed example.
       const head = await fetch(LOCAL_URL, { method: 'HEAD' }).catch(() => null);
       if (head && head.ok) {
-        usingExample = false;
         const saved = readRect(identityOf(LOCAL_URL)) ?? undefined;
         await loadImageFromUrl(LOCAL_URL, saved);
       } else {
-        usingExample = true;
         const saved = readRect(identityOf(EXAMPLE_URL)) ?? EXAMPLE_PRESET;
         await loadImageFromUrl(EXAMPLE_URL, saved);
       }

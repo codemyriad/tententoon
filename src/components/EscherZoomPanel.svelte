@@ -39,6 +39,9 @@
   let t = $state(0);
   let playing = $state(true);
   let cycleSeconds = $state(8);
+  // Captured at scrub start so we can restore the prior playback state
+  // when the user releases the slider.
+  let wasPlayingBeforeScrub = false;
 
   const dims = $derived.by(() => {
     const src = imageState.source;
@@ -109,12 +112,16 @@
   });
 
   // Animation clock — drives t. Pause halts it without losing position.
+  // dt is capped at 1/30 s so coming back from a hidden tab (where rAF
+  // was throttled) doesn't catapult t forward in one frame; the
+  // animation just smoothly picks up where it left off.
+  const MAX_FRAME_DT = 1 / 30;
   $effect(() => {
     if (!playing) return;
     let raf = 0;
     let last = performance.now();
     const tick = (now: number) => {
-      const dt = (now - last) / 1000;
+      const dt = Math.min((now - last) / 1000, MAX_FRAME_DT);
       last = now;
       t = (t + dt / cycleSeconds) % 1;
       raf = requestAnimationFrame(tick);
@@ -204,13 +211,22 @@
           max="1"
           step="0.001"
           bind:value={t}
-          onpointerdown={() => (playing = false)}
+          onpointerdown={() => { wasPlayingBeforeScrub = playing; playing = false; }}
+          onpointerup={() => { playing = wasPlayingBeforeScrub; }}
+          onpointercancel={() => { playing = wasPlayingBeforeScrub; }}
         />
         <span>t = {t.toFixed(3)}</span>
       </label>
     </div>
   {/snippet}
-  <canvas bind:this={canvas}></canvas>
+  <!-- tabindex makes the canvas focusable so Space toggles play when it has focus. -->
+  <canvas
+    bind:this={canvas}
+    tabindex="0"
+    onkeydown={(e) => {
+      if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+    }}
+  ></canvas>
   {#snippet hint()}
     Each frame applies the Escher map with source lnR shifted by t·logS.
     By the self-similarity g(c + λ(z − c)) = g(z) with λ = exp(c̃·logS),

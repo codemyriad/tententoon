@@ -130,7 +130,10 @@ export function sampleDroste(
     return false;
   }
   // Largest n with r·exp(n·logS) ≤ rMax. Walk inward from there until the
-  // scaled point is inside the image rectangle.
+  // scaled point lands inside the image rectangle. The 10-step cap is
+  // generous: dn > 1 only kicks in when one image dimension is much
+  // shorter than the other, so the inner ring spills outside it. Falling
+  // off the cap leaves the pixel transparent (the only reasonable thing).
   const n0 = Math.floor((Math.log(ctx.rMax) - Math.log(r)) / ctx.logS);
   for (let dn = 0; dn <= 10; dn++) {
     const n = n0 - dn;
