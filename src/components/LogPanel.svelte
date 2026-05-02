@@ -6,7 +6,7 @@
 
   const W = 840;
   const H = 280;
-  const N_PERIODS = 3; // how many Droste periods to span horizontally
+  const N_PERIODS = 3; // how many Droste periods to span vertically
 
   let canvas: HTMLCanvasElement | null = $state(null);
 
@@ -45,10 +45,10 @@
     const droste = { cx, cy, logS: g.logS, rMax: ur.rMax };
 
     renderMappedDroste(out, src.pixels, droste, (px, py, s) => {
-      // Horizontal: log-radius u, with larger radii at the right.
-      // Vertical: angle v ∈ [-π, π], wrapping top to bottom.
-      const u = ur.uMin + (px / (W - 1)) * uSpan;
-      const v = -Math.PI + (py / (H - 1)) * 2 * Math.PI;
+      // Horizontal: angle v ∈ [-π, π], wrapping left to right (one full revolution).
+      // Vertical: log-radius u, with larger radii at the top.
+      const v = -Math.PI + (px / (W - 1)) * 2 * Math.PI;
+      const u = ur.uMax - (py / (H - 1)) * uSpan;
       const r = Math.exp(u);
       s.x = cx + r * Math.cos(v);
       s.y = cy + r * Math.sin(v);
@@ -56,16 +56,16 @@
     });
     ctx.putImageData(out, 0, 0);
 
-    // Droste period markers: VERTICAL dashed lines at u = uMax − n·logS.
+    // Droste period markers: HORIZONTAL dashed lines at u = uMax − n·logS.
     ctx.strokeStyle = 'rgba(255, 184, 92, 0.55)';
     ctx.setLineDash([4, 4]);
     ctx.lineWidth = 1;
     for (let n = 1; n < N_PERIODS; n++) {
       const u = ur.uMax - n * g.logS;
-      const x = ((u - ur.uMin) / uSpan) * (W - 1);
+      const y = ((ur.uMax - u) / uSpan) * (H - 1);
       ctx.beginPath();
-      ctx.moveTo(x + 0.5, 0);
-      ctx.lineTo(x + 0.5, H);
+      ctx.moveTo(0, y + 0.5);
+      ctx.lineTo(W, y + 0.5);
       ctx.stroke();
     }
     ctx.setLineDash([]);
@@ -77,10 +77,10 @@
     <h2>log(z − c)</h2>
     {#if geom && uRange}
       <div class="chips mono">
-        <span class="chip" title="Horizontal span in log-radius units">
+        <span class="chip" title="Vertical span in log-radius units">
           u ∈ [{uRange.uMin.toFixed(2)}, {uRange.uMax.toFixed(2)}]
         </span>
-        <span class="chip" title="Width of one Droste period in log units">
+        <span class="chip" title="Height of one Droste period in log units">
           period = logS = {geom.logS.toFixed(3)}
         </span>
       </div>
@@ -88,11 +88,12 @@
   </header>
   <canvas bind:this={canvas} style="width: {W}px; max-width: 100%; height: auto;"></canvas>
   <p class="muted hint">
-    Horizontal: log-radius u around the limit point c, larger radii at the right.
-    Vertical: angle v ∈ [−π, π], wrapping top to bottom. The image is tiled by
-    its own Droste self-similarity: every (u, v) is folded into the outermost
-    ring, so any column here is one complete radial slice of the picture.
-    Dashed verticals mark u = uMax − n·logS, one Droste period apart.
+    Horizontal: angle v ∈ [−π, π] around the limit point c, wrapping left to
+    right — one full revolution as a panorama. Vertical: log-radius u, larger
+    radii at the top. The image is tiled by its own Droste self-similarity:
+    every (u, v) is folded into the outermost ring, so any row here is one
+    complete circular slice of the picture. Dashed horizontals mark
+    u = uMax − n·logS, one Droste period apart.
   </p>
 </section>
 
