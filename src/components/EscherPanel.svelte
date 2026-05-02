@@ -37,11 +37,14 @@
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Escher power: α = 1 - i · k, with k = logS / (2π). Inverse 1/α = μ + iν.
+    // Lenstra/3Blue1Brown construction. The forward map source → Escher is
+    //   z = c + (w − c)^c̃,   c̃ = 2πi/(logS + 2πi)
+    // so the rendering INVERSE map (sample source for each output pixel z) is
+    //   w = c + (z − c)^α,   α = 1/c̃ = 1 − i·k,   k = logS / (2π)
+    // and α·(lnR + iΦ) = (lnR + k·Φ) + i·(Φ − k·lnR).
+    // Sanity check: going CCW around c by 2π shifts the source log by exactly
+    // the diagonal Droste lattice vector (logS, 2π) — one clean Droste step.
     const k = g.logS / (2 * Math.PI);
-    const denom = 1 + k * k;
-    const mu = 1 / denom;
-    const nu = k / denom;
     const cx = g.limit.x;
     const cy = g.limit.y;
 
@@ -50,7 +53,6 @@
 
     const out = ctx.createImageData(d.W, d.H);
     renderMappedDroste(out, src.pixels, droste, (px, py, s) => {
-      // Output canvas pixel → image coord
       const x = px / d.scale;
       const y = py / d.scale;
       const dx = x - cx;
@@ -59,9 +61,8 @@
       if (R2 < 1e-12) return false;
       const lnR = 0.5 * Math.log(R2);
       const Phi = Math.atan2(dy, dx);
-      // (1/α) · (lnR + iΦ) = (μ lnR − ν Φ) + i (ν lnR + μ Φ)
-      const uu = mu * lnR - nu * Phi;
-      const vv = nu * lnR + mu * Phi;
+      const uu = lnR + k * Phi;
+      const vv = Phi - k * lnR;
       const r = Math.exp(uu);
       s.x = cx + r * Math.cos(vv);
       s.y = cy + r * Math.sin(vv);
@@ -99,11 +100,10 @@
   </header>
   <canvas bind:this={canvas}></canvas>
   <p class="muted hint">
-    Output pixel p maps to source pixel c + (p − c)<sup>1/α</sup>. Each output
-    pixel is then folded by the image's Droste self-similarity until it lands
-    inside the picture, so you see the full infinite spiral. Following a
-    circle around c once multiplies sampled radius by S and rotates by α;
-    going outward, the image winds into itself and keeps going.
+    Output pixel z samples the Droste-folded source at c + (z − c)<sup>α</sup>
+    with α = 1 − i·logS/(2π). Following a CCW circle around c once shifts the
+    source log by exactly (logS, 2π) — one full Droste step — so the picture
+    winds into itself: each lap is one zoom level deeper.
   </p>
 </section>
 
