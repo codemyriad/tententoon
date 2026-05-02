@@ -23,32 +23,26 @@
    *
    *     source lnR  = lnR + k·Φ + t·logS
    *     source Φ    = Φ − k·(lnR − lnR₀)
+   *
+   * The only thing that changes per frame is t. So we precompute the
+   * frame-invariant per-pixel work once (whenever the image, rectangle,
+   * or canvas size changes) into typed arrays, and the inner frame loop
+   * is just one multiplication and a Droste-folded sample per pixel.
    */
 
   import { imageState } from '../lib/stores/image.svelte';
-  import { selectionState } from '../lib/stores/selection.svelte';
-  import { drosteGeometry } from '../lib/math/droste';
-  import { renderMappedDroste, maxCornerRadius } from '../lib/math/transforms';
-
-  // Smaller than the static panel: we re-render every frame.
-  const MAX_W = 360;
+  import { pipeline, ANIMATED_MAX_W } from '../lib/stores/pipeline.svelte';
+  import { sampleDroste } from '../lib/math/transforms';
 
   let canvas: HTMLCanvasElement | null = $state(null);
   let t = $state(0);
   let playing = $state(true);
   let cycleSeconds = $state(8);
 
-  const geom = $derived.by(() => {
-    const src = imageState.source;
-    const r = selectionState.rect;
-    if (!src || !r) return null;
-    return drosteGeometry({ width: src.width, height: src.height }, r);
-  });
-
   const dims = $derived.by(() => {
     const src = imageState.source;
     if (!src) return null;
-    const scale = Math.min(1, MAX_W / src.width);
+    const scale = Math.min(1, ANIMATED_MAX_W / src.width);
     return {
       W: Math.round(src.width * scale),
       H: Math.round(src.height * scale),
@@ -56,18 +50,64 @@
     };
   });
 
-  // Same R₀ default as the static panel: middle of one Droste period in
-  // log-radius, so the un-twisted reading sits in the middle of the picture.
-  const refR = $derived.by(() => {
+  /**
+   * Per-pixel cache. Frame-invariant work goes here:
+   *
+   *   baseR[i]   = exp(lnR + k·Φ)        — source radius at t = 0
+   *   cosPhi[i]  = cos(Φ − k·(lnR − lnR₀))
+   *   sinPhi[i]  = sin(...)
+   *   valid[i]   = 0 at the limit point itself, 1 elsewhere
+   *
+   * Per frame we just compute r = baseR[i] · S^t and sample. No log,
+   * atan2, cos, sin, or exp in the hot loop — Droste folding only.
+   *
+   * Rebuilds when geometry, R₀, or canvas dims change.
+   */
+  const cache = $derived.by(() => {
     const src = imageState.source;
-    const g = geom;
-    if (!src || !g) return null;
-    const rMax = maxCornerRadius(src.width, src.height, g.limit.x, g.limit.y);
-    return rMax / Math.sqrt(g.S);
+    const g = pipeline.geom;
+    const d = dims;
+    const R0 = pipeline.R0;
+    if (!src || !g || !d || !R0) return null;
+
+    const { W, H, scale } = d;
+    const N = W * H;
+    const k = g.logS / (2 * Math.PI);
+    const lnR0 = Math.log(Math.max(R0, 1e-9));
+    const cx = g.limit.x;
+    const cy = g.limit.y;
+
+    const baseR = new Float32Array(N);
+    const cosPhi = new Float32Array(N);
+    const sinPhi = new Float32Array(N);
+    const valid = new Uint8Array(N);
+
+    for (let py = 0; py < H; py++) {
+      for (let px = 0; px < W; px++) {
+        const i = py * W + px;
+        const dx = px / scale - cx;
+        const dy = py / scale - cy;
+        const R2 = dx * dx + dy * dy;
+        if (R2 < 1e-12) continue; // valid stays 0 → output black
+        const lnR = 0.5 * Math.log(R2);
+        const Phi = Math.atan2(dy, dx);
+        const newPhi = Phi - k * (lnR - lnR0);
+        baseR[i] = Math.exp(lnR + k * Phi);
+        cosPhi[i] = Math.cos(newPhi);
+        sinPhi[i] = Math.sin(newPhi);
+        valid[i] = 1;
+      }
+    }
+
+    return {
+      W, H,
+      baseR, cosPhi, sinPhi, valid,
+      imageData: new ImageData(W, H),
+      droste: { cx, cy, logS: g.logS, rMax: g.rMax }
+    };
   });
 
-  // Animation loop — drives t from 0 → 1 and wraps. Pause halts it without
-  // losing position.
+  // Animation clock — drives t. Pause halts it without losing position.
   $effect(() => {
     if (!playing) return;
     let raf = 0;
@@ -82,50 +122,45 @@
     return () => cancelAnimationFrame(raf);
   });
 
-  // Render. Re-runs whenever t (or any input) changes — i.e. every frame
-  // while playing.
+  // Render — reads `t` and `cache` and writes pixels. Re-runs every frame
+  // while playing because changing `t` invalidates this effect.
   $effect(() => {
+    const c = cache;
     const src = imageState.source;
-    const g = geom;
-    const d = dims;
-    const R0 = refR;
-    if (!src || !g || !d || !R0 || !canvas) return;
+    const g = pipeline.geom;
+    if (!c || !src || !g || !canvas) return;
 
-    canvas.width = d.W;
-    canvas.height = d.H;
+    if (canvas.width !== c.W) canvas.width = c.W;
+    if (canvas.height !== c.H) canvas.height = c.H;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const k = g.logS / (2 * Math.PI);
-    const lnR0 = Math.log(Math.max(R0, 1e-9));
+    const expTShift = Math.exp(t * g.logS); // = S^t
     const cx = g.limit.x;
     const cy = g.limit.y;
-    const rMax = maxCornerRadius(src.width, src.height, cx, cy);
-    const droste = { cx, cy, logS: g.logS, rMax };
+    const data = c.imageData.data;
+    const rgba: [number, number, number, number] = [0, 0, 0, 0];
+    const N = c.W * c.H;
 
-    // The whole animation lives in this single number: how much further
-    // along the source log-radius axis we are this frame. Drives the
-    // visual descent into c.
-    const tShift = t * g.logS;
-
-    const out = ctx.createImageData(d.W, d.H);
-    renderMappedDroste(out, src.pixels, droste, (px, py, s) => {
-      const x = px / d.scale;
-      const y = py / d.scale;
-      const dx = x - cx;
-      const dy = y - cy;
-      const R2 = dx * dx + dy * dy;
-      if (R2 < 1e-12) return false;
-      const lnR = 0.5 * Math.log(R2);
-      const Phi = Math.atan2(dy, dx);
-      const newLnR = lnR + k * Phi + tShift;
-      const newPhi = Phi - k * (lnR - lnR0);
-      const r = Math.exp(newLnR);
-      s.x = cx + r * Math.cos(newPhi);
-      s.y = cy + r * Math.sin(newPhi);
-      return true;
-    });
-    ctx.putImageData(out, 0, 0);
+    for (let i = 0; i < N; i++) {
+      const idx = i << 2;
+      if (!c.valid[i]) {
+        data[idx] = 0; data[idx + 1] = 0; data[idx + 2] = 0; data[idx + 3] = 0;
+        continue;
+      }
+      const r = c.baseR[i] * expTShift;
+      const sx = cx + r * c.cosPhi[i];
+      const sy = cy + r * c.sinPhi[i];
+      if (sampleDroste(src.pixels, c.droste, sx, sy, rgba)) {
+        data[idx] = rgba[0];
+        data[idx + 1] = rgba[1];
+        data[idx + 2] = rgba[2];
+        data[idx + 3] = rgba[3];
+      } else {
+        data[idx] = 0; data[idx + 1] = 0; data[idx + 2] = 0; data[idx + 3] = 0;
+      }
+    }
+    ctx.putImageData(c.imageData, 0, 0);
   });
 
   function togglePlay() { playing = !playing; }
@@ -135,11 +170,11 @@
 <section class="panel">
   <header>
     <h2>Escher zoom — (z − c)<sup>α</sup>, animated</h2>
-    {#if geom}
-      {@const k = geom.logS / (2 * Math.PI)}
+    {#if pipeline.geom}
+      {@const k = pipeline.geom.logS / (2 * Math.PI)}
       {@const denom = 1 + k * k}
-      {@const lambdaMag = Math.exp(geom.logS / denom)}
-      {@const lambdaArgDeg = (k * geom.logS / denom) * 180 / Math.PI}
+      {@const lambdaMag = Math.exp(pipeline.geom.logS / denom)}
+      {@const lambdaArgDeg = (k * pipeline.geom.logS / denom) * 180 / Math.PI}
       <div class="chips mono">
         <span class="chip" title="|λ| = exp(logS / (1 + k²))">
           |λ| = {lambdaMag.toFixed(2)}

@@ -39,25 +39,15 @@
    */
 
   import { imageState } from '../lib/stores/image.svelte';
-  import { selectionState } from '../lib/stores/selection.svelte';
-  import { drosteGeometry } from '../lib/math/droste';
-  import { renderMappedDroste, maxCornerRadius } from '../lib/math/transforms';
-
-  const MAX_W = 560;
+  import { pipeline, STATIC_MAX_W } from '../lib/stores/pipeline.svelte';
+  import { renderMappedDroste } from '../lib/math/transforms';
 
   let canvas: HTMLCanvasElement | null = $state(null);
-
-  const geom = $derived.by(() => {
-    const src = imageState.source;
-    const r = selectionState.rect;
-    if (!src || !r) return null;
-    return drosteGeometry({ width: src.width, height: src.height }, r);
-  });
 
   const dims = $derived.by(() => {
     const src = imageState.source;
     if (!src) return null;
-    const scale = Math.min(1, MAX_W / src.width);
+    const scale = Math.min(1, STATIC_MAX_W / src.width);
     return {
       W: Math.round(src.width * scale),
       H: Math.round(src.height * scale),
@@ -65,25 +55,11 @@
     };
   });
 
-  // R₀: reference radius where the source reads upright.
-  // Geometric mean of the inner ring (rMax/S) and the outer rim (rMax),
-  // i.e. lnR₀ = ln(rMax) − logS/2 — the middle of one Droste period in
-  // log-radius. The picture's content sits in that annulus, so cancelling
-  // the twist in its middle leaves the smallest residual rotation across
-  // the image.
-  const refR = $derived.by(() => {
-    const src = imageState.source;
-    const g = geom;
-    if (!src || !g) return null;
-    const rMax = maxCornerRadius(src.width, src.height, g.limit.x, g.limit.y);
-    return rMax / Math.sqrt(g.S);
-  });
-
   $effect(() => {
     const src = imageState.source;
-    const g = geom;
+    const g = pipeline.geom;
     const d = dims;
-    const R0 = refR;
+    const R0 = pipeline.R0;
     if (!src || !g || !d || !R0 || !canvas) return;
 
     canvas.width = d.W;
@@ -95,8 +71,7 @@
     const lnR0 = Math.log(Math.max(R0, 1e-9));
     const cx = g.limit.x;
     const cy = g.limit.y;
-    const rMax = maxCornerRadius(src.width, src.height, cx, cy);
-    const droste = { cx, cy, logS: g.logS, rMax };
+    const droste = { cx, cy, logS: g.logS, rMax: g.rMax };
 
     const out = ctx.createImageData(d.W, d.H);
     renderMappedDroste(out, src.pixels, droste, (px, py, s) => {
@@ -145,13 +120,13 @@
 <section class="panel">
   <header>
     <h2>Escher: (z − c)<sup>α</sup></h2>
-    {#if geom && refR}
-      {@const k = geom.logS / (2 * Math.PI)}
+    {#if pipeline.geom && pipeline.R0}
+      {@const k = pipeline.geom.logS / (2 * Math.PI)}
       <div class="chips mono">
         <span class="chip" title="Escher exponent">α = 1 − {k.toFixed(3)}i</span>
         <span class="chip" title="|α| = √(1 + k²)">|α| = {Math.sqrt(1 + k * k).toFixed(3)}</span>
         <span class="chip" title="Reference radius (rMax/√S) — source reads upright at this radius">
-          R₀ = {refR.toFixed(0)} px
+          R₀ = {pipeline.R0.toFixed(0)} px
         </span>
       </div>
     {/if}

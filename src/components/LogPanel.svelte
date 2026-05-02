@@ -18,9 +18,8 @@
    */
 
   import { imageState } from '../lib/stores/image.svelte';
-  import { selectionState } from '../lib/stores/selection.svelte';
-  import { drosteGeometry } from '../lib/math/droste';
-  import { renderMappedDroste, maxCornerRadius } from '../lib/math/transforms';
+  import { pipeline } from '../lib/stores/pipeline.svelte';
+  import { renderMappedDroste } from '../lib/math/transforms';
 
   const N_U = 3;          // horizontal Droste-scale tiles
   const N_V = 2;          // vertical angle-wrap tiles
@@ -29,16 +28,9 @@
 
   let canvas: HTMLCanvasElement | null = $state(null);
 
-  const geom = $derived.by(() => {
-    const src = imageState.source;
-    const r = selectionState.rect;
-    if (!src || !r) return null;
-    return drosteGeometry({ width: src.width, height: src.height }, r);
-  });
-
   // Canvas dimensions follow logS so tile aspect on screen equals logS : 2π.
   const dims = $derived.by(() => {
-    const g = geom;
+    const g = pipeline.geom;
     if (!g) return null;
     const uSpan = N_U * g.logS;
     const vSpan = N_V * 2 * Math.PI;
@@ -55,7 +47,7 @@
 
   $effect(() => {
     const src = imageState.source;
-    const g = geom;
+    const g = pipeline.geom;
     const d = dims;
     if (!src || !g || !d || !canvas) return;
 
@@ -68,11 +60,10 @@
     // v sweeps [-vSpan/2, +vSpan/2]; sin/cos handle the angle wrap.
     const cx = g.limit.x;
     const cy = g.limit.y;
-    const rMax = maxCornerRadius(src.width, src.height, cx, cy);
-    const uMax = Math.log(Math.max(rMax, 1));
+    const uMax = Math.log(Math.max(g.rMax, 1));
     const uMin = uMax - d.uSpan;
     const vTop = d.vSpan / 2;
-    const droste = { cx, cy, logS: g.logS, rMax };
+    const droste = { cx, cy, logS: g.logS, rMax: g.rMax };
 
     const out = ctx.createImageData(d.W, d.H);
     renderMappedDroste(out, src.pixels, droste, (px, py, s) => {
@@ -110,10 +101,10 @@
 <section class="panel">
   <header>
     <h2>log(z − c)</h2>
-    {#if geom}
+    {#if pipeline.geom}
       <div class="chips mono">
         <span class="chip" title="Horizontal Droste period">
-          period<sub>u</sub> = logS = {geom.logS.toFixed(3)}
+          period<sub>u</sub> = logS = {pipeline.geom.logS.toFixed(3)}
         </span>
         <span class="chip" title="Vertical angle period">
           period<sub>v</sub> = 2π

@@ -23,9 +23,8 @@
    */
 
   import { imageState } from '../lib/stores/image.svelte';
-  import { selectionState } from '../lib/stores/selection.svelte';
-  import { drosteGeometry } from '../lib/math/droste';
-  import { renderMappedDroste, maxCornerRadius } from '../lib/math/transforms';
+  import { pipeline } from '../lib/stores/pipeline.svelte';
+  import { renderMappedDroste } from '../lib/math/transforms';
 
   const W = 840;
   const H = 280;
@@ -33,16 +32,9 @@
 
   let canvas: HTMLCanvasElement | null = $state(null);
 
-  const geom = $derived.by(() => {
-    const src = imageState.source;
-    const r = selectionState.rect;
-    if (!src || !r) return null;
-    return drosteGeometry({ width: src.width, height: src.height }, r);
-  });
-
   $effect(() => {
     const src = imageState.source;
-    const g = geom;
+    const g = pipeline.geom;
     if (!src || !g || !canvas) return;
 
     canvas.width = W;
@@ -59,10 +51,9 @@
 
     const cx = g.limit.x;
     const cy = g.limit.y;
-    const rMax = maxCornerRadius(src.width, src.height, cx, cy);
-    const uMin = Math.log(Math.max(rMax, 1)) - N_PERIODS * g.logS;
+    const uMin = Math.log(Math.max(g.rMax, 1)) - N_PERIODS * g.logS;
     const uSpan = N_PERIODS * g.logS;
-    const droste = { cx, cy, logS: g.logS, rMax };
+    const droste = { cx, cy, logS: g.logS, rMax: g.rMax };
 
     const out = ctx.createImageData(W, H);
     renderMappedDroste(out, src.pixels, droste, (px, py, s) => {
@@ -94,15 +85,15 @@
 <section class="panel">
   <header>
     <h2>log(z − c), rotated by β</h2>
-    {#if geom}
-      {@const beta = Math.atan2(geom.logS, 2 * Math.PI)}
-      {@const L = Math.hypot(geom.logS, 2 * Math.PI)}
+    {#if pipeline.geom}
+      {@const beta = Math.atan2(pipeline.geom.logS, 2 * Math.PI)}
+      {@const L = Math.hypot(pipeline.geom.logS, 2 * Math.PI)}
       <div class="chips mono">
         <span class="chip" title="Rotation angle">
           β = {(beta * 180 / Math.PI).toFixed(2)}°
         </span>
         <span class="chip" title="tan β = logS / 2π">
-          tan β = logS / 2π = {(geom.logS / (2 * Math.PI)).toFixed(3)}
+          tan β = logS / 2π = {(pipeline.geom.logS / (2 * Math.PI)).toFixed(3)}
         </span>
         <span class="chip" title="Vertical period after rotation">
           period = L = {L.toFixed(3)}

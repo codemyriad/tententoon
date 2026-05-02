@@ -30,6 +30,8 @@ export type DrosteGeometry = {
   logS: number;
   /** Limit point: the fixed point of the shrink map (in source pixel coords). */
   limit: Point;
+  /** Largest |corner − c|; the outer radius of the source disk. */
+  rMax: number;
 };
 
 export function drosteGeometry(
@@ -40,7 +42,17 @@ export function drosteGeometry(
   const logS = Math.log(S);
   const k = S / (S - 1);
   const limit: Point = { x: rect.x * k, y: rect.y * k };
-  return { S, logS, limit };
+  const rMax = maxCornerDistance(image.width, image.height, limit);
+  return { S, logS, limit, rMax };
+}
+
+function maxCornerDistance(W: number, H: number, c: Point): number {
+  let m = 0;
+  for (const [x, y] of [[0, 0], [W, 0], [0, H], [W, H]]) {
+    const r = Math.hypot(x - c.x, y - c.y);
+    if (r > m) m = r;
+  }
+  return m;
 }
 
 /** Clamp a rectangle (aspect-locked to image aspect) so it stays inside the image. */

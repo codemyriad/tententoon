@@ -174,23 +174,3 @@ export function renderMappedDroste(
   }
 }
 
-/** Largest |corner − c| for the given image — the outer radius of the source disk. */
-export function maxCornerRadius(
-  imageWidth: number,
-  imageHeight: number,
-  cx: number,
-  cy: number
-): number {
-  let maxR = 0;
-  const corners: Array<[number, number]> = [
-    [0, 0],
-    [imageWidth, 0],
-    [0, imageHeight],
-    [imageWidth, imageHeight]
-  ];
-  for (const [x, y] of corners) {
-    const r = Math.hypot(x - cx, y - cy);
-    if (r > maxR) maxR = r;
-  }
-  return maxR;
-}
