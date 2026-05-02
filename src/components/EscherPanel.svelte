@@ -41,6 +41,7 @@
   import { imageState } from '../lib/stores/image.svelte';
   import { pipeline, STATIC_MAX_W } from '../lib/stores/pipeline.svelte';
   import { renderMappedDroste } from '../lib/math/transforms';
+  import Panel from './Panel.svelte';
 
   let canvas: HTMLCanvasElement | null = $state(null);
 
@@ -117,9 +118,9 @@
   });
 </script>
 
-<section class="panel">
-  <header>
-    <h2>Escher: (z − c)<sup>α</sup></h2>
+<Panel>
+  {#snippet title()}Escher: (z − c)<sup>α</sup>{/snippet}
+  {#snippet chips()}
     {#if pipeline.geom && pipeline.R0}
       {@const k = pipeline.geom.logS / (2 * Math.PI)}
       <div class="chips mono">
@@ -130,9 +131,9 @@
         </span>
       </div>
     {/if}
-  </header>
+  {/snippet}
   <canvas bind:this={canvas}></canvas>
-  <p class="muted hint">
+  {#snippet hint()}
     Output pixel z samples the Droste-folded source at c + (z − c)<sup>α</sup>
     with α = 1 − i·logS/(2π). Going CCW around c once shifts the source
     log by exactly (logS, 2π) — one full Droste step — so the picture
@@ -141,42 +142,5 @@
     (the middle of one Droste period in log-radius), so the photo reads
     upright there and progressively more wound inward / outward as you
     leave R₀.
-  </p>
-</section>
-
-<style>
-  .panel {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    max-width: 1240px;
-  }
-  header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
-  }
-  h2 { margin: 0; }
-  canvas {
-    display: block;
-    border: 1px solid var(--border);
-    background: var(--bg);
-    image-rendering: auto;
-  }
-  .chips {
-    display: flex;
-    gap: 0.5rem;
-    font-size: 0.85rem;
-  }
-  .chip {
-    padding: 0.2em 0.55em;
-    border: 1px solid var(--border);
-    color: var(--fg);
-  }
-  .hint {
-    font-size: 0.85rem;
-    max-width: 720px;
-  }
-</style>
+  {/snippet}
+</Panel>

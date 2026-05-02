@@ -20,6 +20,7 @@
   import { imageState } from '../lib/stores/image.svelte';
   import { pipeline } from '../lib/stores/pipeline.svelte';
   import { renderMappedDroste } from '../lib/math/transforms';
+  import Panel from './Panel.svelte';
 
   const N_U = 3;          // horizontal Droste-scale tiles
   const N_V = 2;          // vertical angle-wrap tiles
@@ -98,9 +99,9 @@
   });
 </script>
 
-<section class="panel">
-  <header>
-    <h2>log(z − c)</h2>
+<Panel>
+  {#snippet title()}log(z − c){/snippet}
+  {#snippet chips()}
     {#if pipeline.geom}
       <div class="chips mono">
         <span class="chip" title="Horizontal Droste period">
@@ -114,51 +115,19 @@
         </span>
       </div>
     {/if}
-  </header>
+  {/snippet}
   <canvas bind:this={canvas} style="max-width: 100%; height: auto;"></canvas>
-  <p class="muted hint">
+  {#snippet hint()}
     Horizontal: u = log|z − c|, period logS — every shift by logS reproduces
     the same picture (Droste self-similarity). Vertical: v = arg(z − c),
     period 2π — going around c once is the identity. The two together form
     a rectangular (logS, 2π) lattice; each dashed cell is one fundamental
     tile. The next panel multiplies log by 2πi/(logS + 2πi), which tilts
     this lattice's diagonal onto the vertical axis.
-  </p>
-</section>
+  {/snippet}
+</Panel>
 
 <style>
-  .panel {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    max-width: 1240px;
-  }
-  header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
-  }
-  h2 { margin: 0; }
-  canvas {
-    display: block;
-    border: 1px solid var(--border);
-    background: var(--bg);
-    image-rendering: pixelated;
-  }
-  .chips {
-    display: flex;
-    gap: 0.5rem;
-    font-size: 0.85rem;
-  }
-  .chip {
-    padding: 0.2em 0.55em;
-    border: 1px solid var(--border);
-    color: var(--fg);
-  }
-  .hint {
-    font-size: 0.85rem;
-    max-width: 720px;
-  }
+  /* Pixel-perfect tiles read better than smoothed for the lattice view. */
+  canvas { image-rendering: pixelated; }
 </style>

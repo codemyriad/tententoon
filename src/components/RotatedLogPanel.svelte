@@ -25,6 +25,7 @@
   import { imageState } from '../lib/stores/image.svelte';
   import { pipeline } from '../lib/stores/pipeline.svelte';
   import { renderMappedDroste } from '../lib/math/transforms';
+  import Panel from './Panel.svelte';
 
   const W = 840;
   const H = 280;
@@ -82,9 +83,9 @@
   });
 </script>
 
-<section class="panel">
-  <header>
-    <h2>log(z − c), rotated by β</h2>
+<Panel>
+  {#snippet title()}log(z − c), rotated by β{/snippet}
+  {#snippet chips()}
     {#if pipeline.geom}
       {@const beta = Math.atan2(pipeline.geom.logS, 2 * Math.PI)}
       {@const L = Math.hypot(pipeline.geom.logS, 2 * Math.PI)}
@@ -100,9 +101,9 @@
         </span>
       </div>
     {/if}
-  </header>
+  {/snippet}
   <canvas bind:this={canvas} style="width: {W}px; max-width: 100%; height: auto;"></canvas>
-  <p class="muted hint">
+  {#snippet hint()}
     Same log strip rotated by β = atan(logS / 2π). The diagonal lattice
     vector (logS, 2π) now stands purely vertical with length L = √(logS² + 4π²);
     the canvas is exactly L tall, so top and bottom rows coincide. This is
@@ -110,42 +111,9 @@
     right, radial scaling off). The proper Lenstra step in the next panel
     multiplies log by 2πi/(logS + 2πi) instead, which is the same rotation
     PLUS a scaling by 2π/L.
-  </p>
-</section>
+  {/snippet}
+</Panel>
 
 <style>
-  .panel {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    max-width: 1240px;
-  }
-  header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
-  }
-  h2 { margin: 0; }
-  canvas {
-    display: block;
-    border: 1px solid var(--border);
-    background: var(--bg);
-    image-rendering: pixelated;
-  }
-  .chips {
-    display: flex;
-    gap: 0.5rem;
-    font-size: 0.85rem;
-  }
-  .chip {
-    padding: 0.2em 0.55em;
-    border: 1px solid var(--border);
-    color: var(--fg);
-  }
-  .hint {
-    font-size: 0.85rem;
-    max-width: 720px;
-  }
+  canvas { image-rendering: pixelated; }
 </style>

@@ -33,6 +33,7 @@
   import { imageState } from '../lib/stores/image.svelte';
   import { pipeline, ANIMATED_MAX_W } from '../lib/stores/pipeline.svelte';
   import { sampleDroste } from '../lib/math/transforms';
+  import Panel from './Panel.svelte';
 
   let canvas: HTMLCanvasElement | null = $state(null);
   let t = $state(0);
@@ -167,9 +168,9 @@
   function reset() { t = 0; }
 </script>
 
-<section class="panel">
-  <header>
-    <h2>Escher zoom — (z − c)<sup>α</sup>, animated</h2>
+<Panel>
+  {#snippet title()}Escher zoom — (z − c)<sup>α</sup>, animated{/snippet}
+  {#snippet chips()}
     {#if pipeline.geom}
       {@const k = pipeline.geom.logS / (2 * Math.PI)}
       {@const denom = 1 + k * k}
@@ -184,88 +185,43 @@
         </span>
       </div>
     {/if}
-  </header>
-  <div class="controls mono">
-    <button onclick={togglePlay} aria-pressed={playing}>
-      {playing ? 'Pause' : 'Play'}
-    </button>
-    <button onclick={reset}>Reset</button>
-    <label class="speed">
-      Cycle
-      <input type="range" min="1" max="20" step="0.5" bind:value={cycleSeconds} />
-      <span>{cycleSeconds.toFixed(1)} s</span>
-    </label>
-    <label class="scrub">
-      <input
-        type="range"
-        min="0"
-        max="1"
-        step="0.001"
-        bind:value={t}
-        onpointerdown={() => (playing = false)}
-      />
-      <span>t = {t.toFixed(3)}</span>
-    </label>
-  </div>
+  {/snippet}
+  {#snippet controls()}
+    <div class="controls mono">
+      <button onclick={togglePlay} aria-pressed={playing}>
+        {playing ? 'Pause' : 'Play'}
+      </button>
+      <button onclick={reset}>Reset</button>
+      <label class="speed">
+        Cycle
+        <input type="range" min="1" max="20" step="0.5" bind:value={cycleSeconds} />
+        <span>{cycleSeconds.toFixed(1)} s</span>
+      </label>
+      <label class="scrub">
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.001"
+          bind:value={t}
+          onpointerdown={() => (playing = false)}
+        />
+        <span>t = {t.toFixed(3)}</span>
+      </label>
+    </div>
+  {/snippet}
   <canvas bind:this={canvas}></canvas>
-  <p class="muted hint">
+  {#snippet hint()}
     Each frame applies the Escher map with source lnR shifted by t·logS.
     By the self-similarity g(c + λ(z − c)) = g(z) with λ = exp(c̃·logS),
     one cycle of t spirals the picture inward by exactly one Droste level
     — scaled by |λ| and rotated by arg(λ) — and t = 1 lands back where
     t = 0 began, so the loop is seamless.
-  </p>
-</section>
+  {/snippet}
+</Panel>
 
 <style>
-  .panel {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    max-width: 1240px;
-  }
-  header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
-  }
-  h2 { margin: 0; }
-  .controls {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    font-size: 0.85rem;
-    flex-wrap: wrap;
-  }
-  .speed,
-  .scrub {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    color: var(--muted);
-  }
-  .scrub input { width: 180px; }
-  .speed input { width: 110px; }
-  canvas {
-    display: block;
-    border: 1px solid var(--border);
-    background: var(--bg);
-    image-rendering: auto;
-  }
-  .chips {
-    display: flex;
-    gap: 0.5rem;
-    font-size: 0.85rem;
-  }
-  .chip {
-    padding: 0.2em 0.55em;
-    border: 1px solid var(--border);
-    color: var(--fg);
-  }
-  .hint {
-    font-size: 0.85rem;
-    max-width: 720px;
-  }
+  /* Panel-specific tweaks: slider widths. Other control styling is in Panel. */
+  .controls input[type='range'] { width: 110px; }
+  .controls .scrub input { width: 180px; }
 </style>
