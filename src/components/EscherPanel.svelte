@@ -19,6 +19,19 @@
    * source log by exactly the diagonal lattice vector (logS, 2π) — one
    * clean Droste step. So one full lap in the Escher panel is one zoom
    * level deeper into the source.
+   *
+   * Reference radius R₀ — the orientation knob.
+   * The map twists: source angle = Φ − k·lnR, so the source orientation
+   * drifts with lnR. At R = 1 px the source is upright; everywhere else
+   * it's rotated by k·lnR. Lenstra's formula leaves a free overall
+   * rotation, which we use to make the picture upright at SOME chosen
+   * reference radius R₀:
+   *
+   *     source angle = Φ − k·(lnR − lnR₀)
+   *
+   * Default: distance from c to the centre of the user's selected
+   * rectangle. That puts the un-twisted reading right where the eye
+   * naturally lands. Other choices just rotate the whole panel.
    */
 
   import { imageState } from '../lib/stores/image.svelte';
@@ -48,11 +61,25 @@
     };
   });
 
+  // R₀: reference radius where the source reads upright.
+  // We pick the centre of the selected rectangle — its distance from c is
+  // a "typical" radius for the picture, so the un-twisted view lands on
+  // the part of the photo the user just framed.
+  const refR = $derived.by(() => {
+    const r = selectionState.rect;
+    const g = geom;
+    if (!r || !g) return null;
+    const rectCx = r.x + r.w / 2;
+    const rectCy = r.y + r.h / 2;
+    return Math.hypot(rectCx - g.limit.x, rectCy - g.limit.y);
+  });
+
   $effect(() => {
     const src = imageState.source;
     const g = geom;
     const d = dims;
-    if (!src || !g || !d || !canvas) return;
+    const R0 = refR;
+    if (!src || !g || !d || !R0 || !canvas) return;
 
     canvas.width = d.W;
     canvas.height = d.H;
@@ -60,6 +87,7 @@
     if (!ctx) return;
 
     const k = g.logS / (2 * Math.PI);
+    const lnR0 = Math.log(Math.max(R0, 1e-9));
     const cx = g.limit.x;
     const cy = g.limit.y;
     const rMax = maxCornerRadius(src.width, src.height, cx, cy);
@@ -79,8 +107,11 @@
       const lnR = 0.5 * Math.log(R2);
       const Phi = Math.atan2(dy, dx);
       // α · log = (lnR + k·Φ) + i·(Φ − k·lnR).
+      // Then add the upright-at-R₀ rotation k·lnR₀ to the angle:
+      //   source lnR  = lnR + k·Φ
+      //   source Φ    = Φ − k·(lnR − lnR₀)
       const newLnR = lnR + k * Phi;
-      const newPhi = Phi - k * lnR;
+      const newPhi = Phi - k * (lnR - lnR0);
       // exp back to source coords.
       const r = Math.exp(newLnR);
       s.x = cx + r * Math.cos(newPhi);
@@ -109,20 +140,27 @@
 <section class="panel">
   <header>
     <h2>Escher: (z − c)<sup>α</sup></h2>
-    {#if geom}
+    {#if geom && refR}
       {@const k = geom.logS / (2 * Math.PI)}
       <div class="chips mono">
         <span class="chip" title="Escher exponent">α = 1 − {k.toFixed(3)}i</span>
         <span class="chip" title="|α| = √(1 + k²)">|α| = {Math.sqrt(1 + k * k).toFixed(3)}</span>
+        <span class="chip" title="Reference radius — source is upright here">
+          R₀ = {refR.toFixed(0)} px
+        </span>
       </div>
     {/if}
   </header>
   <canvas bind:this={canvas}></canvas>
   <p class="muted hint">
     Output pixel z samples the Droste-folded source at c + (z − c)<sup>α</sup>
-    with α = 1 − i·logS/(2π). Following a CCW circle around c once shifts
-    the source log by exactly (logS, 2π) — one full Droste step — so the
-    picture winds into itself: each lap is one zoom level deeper.
+    with α = 1 − i·logS/(2π). Going CCW around c once shifts the source
+    log by exactly (logS, 2π) — one full Droste step — so the picture
+    winds into itself: each lap is one zoom level deeper. The map twists
+    the source angle by k·lnR; we cancel that twist at the reference
+    radius R₀ (centre of the selected rectangle), so the photo reads
+    upright there and progressively more wound inward / outward as you
+    leave R₀.
   </p>
 </section>
 
