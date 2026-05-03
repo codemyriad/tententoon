@@ -32,7 +32,7 @@
 
   import { imageState } from '../lib/stores/image.svelte';
   import { pipeline, ANIMATED_MAX_W } from '../lib/stores/pipeline.svelte';
-  import { sampleDroste } from '../lib/math/transforms';
+  import { sampleDrosteMipped } from '../lib/math/transforms';
   import Panel from './Panel.svelte';
 
   let canvas: HTMLCanvasElement | null = $state(null);
@@ -137,13 +137,24 @@
   // while playing because changing `t` invalidates this effect.
   $effect(() => {
     const c = cache;
-    const src = imageState.source;
-    if (!c || !src || !canvas) return;
+    const mips = pipeline.mipmap;
+    const d = dims;
+    if (!c || !mips || !d || !canvas) return;
 
     if (canvas.width !== c.W) canvas.width = c.W;
     if (canvas.height !== c.H) canvas.height = c.H;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    // Anti-aliasing: each output pixel maps to a source region of side
+    //   |α| · S^(t+n) / canvasScale,
+    // where n is the per-pixel Droste fold count. log₂ of that picks the
+    // mipmap level. Split into a per-frame constant base plus the per-
+    // pixel n contribution; sampleDrosteMipped adds the latter inside.
+    const k = c.droste.logS / (2 * Math.PI);
+    const log2S = c.droste.logS / Math.LN2;
+    const log2AlphaOverScale = 0.5 * Math.log2(1 + k * k) - Math.log2(d.scale);
+    const baseLevel = log2AlphaOverScale + t * log2S;
 
     const expTShift = Math.exp(t * c.droste.logS); // = S^t
     const { cx, cy } = c.droste;
@@ -160,7 +171,7 @@
       const r = c.baseR[i] * expTShift;
       const sx = cx + r * c.cosPhi[i];
       const sy = cy + r * c.sinPhi[i];
-      if (sampleDroste(src.pixels, c.droste, sx, sy, rgba)) {
+      if (sampleDrosteMipped(mips, c.droste, sx, sy, baseLevel, log2S, rgba)) {
         data[idx] = rgba[0];
         data[idx + 1] = rgba[1];
         data[idx + 2] = rgba[2];

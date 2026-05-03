@@ -18,7 +18,7 @@
  */
 
 import { drosteGeometry, type DrosteGeometry } from '../math/droste';
-import type { DrosteCtx } from '../math/transforms';
+import { buildMipmap, type DrosteCtx } from '../math/transforms';
 import { imageState } from './image.svelte';
 import { selectionState } from './selection.svelte';
 
@@ -72,6 +72,18 @@ class Pipeline {
     const g = this.geom;
     if (!g) return null;
     return g.rMax / Math.sqrt(g.S);
+  });
+
+  /**
+   * Mipmap pyramid of the source image. Built once per image (the pyramid
+   * is stable as long as imageState.source's identity is stable). Panels
+   * that suffer from minification aliasing (the Escher panels near c)
+   * sample through this; cheaper panels can keep using the bare ImageData.
+   */
+  readonly mipmap = $derived.by((): ImageData[] | null => {
+    const src = imageState.source;
+    if (!src) return null;
+    return buildMipmap(src.pixels);
   });
 
   /**

@@ -157,6 +157,124 @@ export function sampleDroste(
   return false;
 }
 
+/**
+ * Mipmap pyramid: levels[0] is the original image, levels[k] is half the
+ * width and height of levels[k-1]. Used for filtered minification — when
+ * one output pixel covers many source pixels (e.g. the Escher panels
+ * sampling near c, where one canvas pixel covers |α|·S^(t+n) source pixels)
+ * bilinear from level 0 aliases. Sampling from level k effectively
+ * box-averages a 2^k × 2^k source region, killing the aliasing.
+ *
+ * One-time build cost is ~1.3× the original image's pixel count
+ * (geometric series). 2x2 box downsample is good enough for natural
+ * photos; gaussian or lanczos would be sharper but cost more.
+ */
+export function buildMipmap(src: Pixels): Pixels[] {
+  const levels: Pixels[] = [src];
+  let cur = src;
+  while (cur.width >= 2 && cur.height >= 2) {
+    const w = cur.width >> 1;
+    const h = cur.height >> 1;
+    const next = new ImageData(w, h);
+    const sd = cur.data;
+    const td = next.data;
+    const sw = cur.width;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const sx = x << 1;
+        const sy = y << 1;
+        const i00 = (sy * sw + sx) << 2;
+        const i10 = i00 + 4;
+        const i01 = i00 + (sw << 2);
+        const i11 = i01 + 4;
+        const di = (y * w + x) << 2;
+        td[di]     = (sd[i00]     + sd[i10]     + sd[i01]     + sd[i11]    ) >> 2;
+        td[di + 1] = (sd[i00 + 1] + sd[i10 + 1] + sd[i01 + 1] + sd[i11 + 1]) >> 2;
+        td[di + 2] = (sd[i00 + 2] + sd[i10 + 2] + sd[i01 + 2] + sd[i11 + 2]) >> 2;
+        td[di + 3] = (sd[i00 + 3] + sd[i10 + 3] + sd[i01 + 3] + sd[i11 + 3]) >> 2;
+      }
+    }
+    levels.push(next);
+    cur = next;
+  }
+  return levels;
+}
+
+/**
+ * Trilinear sample: bilinear from the two mipmap levels bracketing `level`,
+ * then linear blend between them. (x, y) are in level-0 pixel coords.
+ * level ≤ 0 falls through to bilinear at level 0; level beyond the smallest
+ * mip clamps to it. The blend kills banding between integer levels.
+ */
+export function sampleTrilinear(
+  mips: Pixels[],
+  x: number,
+  y: number,
+  level: number,
+  out: [number, number, number, number]
+): void {
+  const Lmax = mips.length - 1;
+  if (level <= 0 || Lmax === 0) {
+    sample(mips[0], x, y, out);
+    return;
+  }
+  const L = Math.min(Lmax, level);
+  const L0 = Math.min(Lmax, Math.floor(L));
+  const L1 = Math.min(Lmax, L0 + 1);
+  const f0 = 1 << L0;
+  sample(mips[L0], x / f0, y / f0, out);
+  if (L1 === L0) return;
+  const tmp1: [number, number, number, number] = [0, 0, 0, 0];
+  const f1 = 1 << L1;
+  sample(mips[L1], x / f1, y / f1, tmp1);
+  const blend = L - L0;
+  const inv = 1 - blend;
+  out[0] = out[0] * inv + tmp1[0] * blend;
+  out[1] = out[1] * inv + tmp1[1] * blend;
+  out[2] = out[2] * inv + tmp1[2] * blend;
+  out[3] = out[3] * inv + tmp1[3] * blend;
+}
+
+/**
+ * Mipmap-aware variant of `sampleDroste`. Inside the fold loop we know n
+ * (how many S-step shrinks the sample picked up); each n contributes
+ * n·log₂S to the mip level. The caller's `baseLevel` accounts for
+ * everything else: log₂(|α|/canvasScale) for the panel, plus any
+ * time-dependent factor (e.g. t·log₂S for the spiral zoom). The level
+ * formula is just baseLevel + n·log₂S, derived from the chain
+ *
+ *     |d source / d canvas| = |α| · S^(t+n) / canvasScale.
+ */
+export function sampleDrosteMipped(
+  mips: Pixels[],
+  ctx: DrosteCtx,
+  sx: number,
+  sy: number,
+  baseLevel: number,
+  log2S: number,
+  out: [number, number, number, number]
+): boolean {
+  const dx = sx - ctx.cx;
+  const dy = sy - ctx.cy;
+  const r = Math.hypot(dx, dy);
+  if (r < 1e-9) {
+    out[0] = 0; out[1] = 0; out[2] = 0; out[3] = 0;
+    return false;
+  }
+  const n0 = Math.floor((Math.log(ctx.rMax) - Math.log(r)) / ctx.logS);
+  for (let dn = 0; dn <= 10; dn++) {
+    const n = n0 - dn;
+    const scale = Math.exp(n * ctx.logS);
+    const tx = ctx.cx + dx * scale;
+    const ty = ctx.cy + dy * scale;
+    if (tx >= 0 && ty >= 0 && tx <= ctx.W - 1 && ty <= ctx.H - 1) {
+      sampleTrilinear(mips, tx + ctx.cropX, ty + ctx.cropY, baseLevel + n * log2S, out);
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Like `renderMapped`, but routes every source lookup through Droste folding. */
 export function renderMappedDroste(
   out: ImageData,
