@@ -26,6 +26,10 @@
   let t = $state(0);
   let playing = $state(true);
   let cycleSeconds = $state(8);
+  // ResizeObserver bumps this when the canvas gets resized (e.g. after the
+  // crop's aspect changes the CSS aspect-ratio). The render effect reads
+  // it so it runs once more with the up-to-date canvas dimensions.
+  let resizeTick = $state(0);
 
   // Use the shared pipeline geom — `geom.limit` is in CROP coords, which is
   // exactly what we need below since every drawImage call places the
@@ -38,8 +42,13 @@
       if (!canvas) return;
       const dpr = window.devicePixelRatio || 1;
       const rect = canvas.getBoundingClientRect();
-      canvas.width = Math.max(1, Math.round(rect.width * dpr));
-      canvas.height = Math.max(1, Math.round(rect.height * dpr));
+      const w = Math.max(1, Math.round(rect.width * dpr));
+      const h = Math.max(1, Math.round(rect.height * dpr));
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+        resizeTick++;
+      }
     };
     resize();
     const ro = new ResizeObserver(resize);
@@ -69,6 +78,7 @@
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     void t;
+    void resizeTick; // re-render after the canvas's intrinsic size changes
 
     const dpr = window.devicePixelRatio || 1;
     const W = canvas.width / dpr;
