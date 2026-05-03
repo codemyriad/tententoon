@@ -115,6 +115,14 @@ export type DrosteCtx = {
   H: number;
   cropX: number;
   cropY: number;
+  /**
+   * Multiplier applied to the final coords just before reading pixels.
+   * 1 for the regular source. > 1 lets the caller pass an upscaled
+   * image (e.g. 4× from fal.ai) while keeping all the geometry math in
+   * original-image coords — the caller swaps `pixels` and bumps
+   * `sampleScale` together.
+   */
+  sampleScale: number;
 };
 
 /**
@@ -150,11 +158,49 @@ export function sampleDroste(
     const tx = ctx.cx + dx * scale;
     const ty = ctx.cy + dy * scale;
     if (tx >= 0 && ty >= 0 && tx <= ctx.W - 1 && ty <= ctx.H - 1) {
-      sample(src, tx + ctx.cropX, ty + ctx.cropY, out);
+      const ss = ctx.sampleScale;
+      sample(src, (tx + ctx.cropX) * ss, (ty + ctx.cropY) * ss, out);
       return true;
     }
   }
   return false;
+}
+
+/**
+ * Sub-pixel offsets for adaptive supersampling, in CANVAS-pixel units.
+ *
+ * Three tiers: 1, 4, 16 samples per output pixel. The 4- and 16-tap
+ * patterns are regular grids placed at cell centres so the average is
+ * unbiased. Pixels far from c stay at 1×; pixels where the local
+ * Jacobian × Droste fold blows the source-per-output-pixel ratio above
+ * one need 4× or 16× to integrate that footprint correctly. Higher
+ * tiers would help even further, but 16 is enough to stop the visible
+ * staircasing in practice and we don't want to pay for it everywhere.
+ */
+export const SS_OFFSETS_4: readonly (readonly [number, number])[] = [
+  [-0.25, -0.25], [0.25, -0.25], [-0.25, 0.25], [0.25, 0.25]
+];
+export const SS_OFFSETS_16: readonly (readonly [number, number])[] = (() => {
+  const o: [number, number][] = [];
+  for (let j = 0; j < 4; j++) {
+    for (let i = 0; i < 4; i++) {
+      o.push([(i + 0.5) / 4 - 0.5, (j + 0.5) / 4 - 0.5]);
+    }
+  }
+  return o;
+})();
+
+/**
+ * Pick a supersampling tier from a footprint estimate F = source-pixels per
+ * output-canvas-pixel. F ≤ 1 needs no SS; F² samples is the standard rule
+ * for an isotropic square footprint. We round up to the next available
+ * tier (1, 4, 16) and cap at 16.
+ */
+export function ssOffsetsForFootprint(footprint: number): readonly (readonly [number, number])[] | null {
+  const fp2 = footprint * footprint;
+  if (fp2 <= 1) return null;
+  if (fp2 <= 4) return SS_OFFSETS_4;
+  return SS_OFFSETS_16;
 }
 
 /** Like `renderMapped`, but routes every source lookup through Droste folding. */

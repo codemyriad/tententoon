@@ -5,10 +5,14 @@
  * rectangle) and the crop (sub-rectangle of the original to use as the
  * working image). From those we derive everything every panel needs:
  *
- *   workingSize  — dimensions of the working image (= the crop)
- *   geom         — DrosteGeometry in WORKING (crop-relative) coords
- *   R0           — reference radius for the Escher panel's twist correction
- *   drosteCtx    — ready-to-pass context for sampleDroste / renderMappedDroste
+ *   workingSize     — dimensions of the working image (= the crop)
+ *   geom            — DrosteGeometry in WORKING (crop-relative) coords
+ *   R0              — reference radius for the Escher panel's twist correction
+ *   drosteCtx       — ready-to-pass context for sampleDroste / renderMappedDroste
+ *   samplingPixels  — the ImageData to read from: the AI-upscaled HQ
+ *                     buffer when present, otherwise the raw source.
+ *                     Pairs with drosteCtx.sampleScale (set to the HQ
+ *                     factor so geometry math stays in original coords).
  *
  * Render budget per panel — pixels of canvas width:
  *
@@ -77,12 +81,16 @@ class Pipeline {
   /**
    * Pre-built DrosteCtx for callers of sampleDroste / renderMappedDroste.
    * Carries the crop offset so sampling indexes into the original
-   * ImageData while the math runs in working coords.
+   * ImageData while the math runs in working coords. `sampleScale`
+   * tracks the HQ source's pixel-density factor so the same context
+   * works whether we're sampling from the raw bitmap or the upscaled
+   * one — see `samplingPixels` below.
    */
   readonly drosteCtx = $derived.by((): DrosteCtx | null => {
     const g = this.geom;
     const crop = selectionState.crop;
     if (!g || !crop) return null;
+    const hq = imageState.sourceHQ;
     return {
       cx: g.limit.x,
       cy: g.limit.y,
@@ -91,8 +99,20 @@ class Pipeline {
       W: crop.w,
       H: crop.h,
       cropX: crop.x,
-      cropY: crop.y
+      cropY: crop.y,
+      sampleScale: hq ? hq.scale : 1
     };
+  });
+
+  /**
+   * Pixel buffer the math panels should sample from. Falls back to the
+   * raw source when no HQ has been requested. Always paired with
+   * `drosteCtx.sampleScale` so the geometry runs in original-image coords.
+   */
+  readonly samplingPixels = $derived.by((): ImageData | null => {
+    const hq = imageState.sourceHQ;
+    if (hq) return hq.pixels;
+    return imageState.source?.pixels ?? null;
   });
 }
 

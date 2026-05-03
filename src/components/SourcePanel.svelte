@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { imageState } from '../lib/stores/image.svelte';
+  import { imageState, upscaleSource, clearSourceHQ } from '../lib/stores/image.svelte';
   import { selectionState, initSelection, setAspectLocked } from '../lib/stores/selection.svelte';
   import { pipeline } from '../lib/stores/pipeline.svelte';
   import RectanglePicker from './RectanglePicker.svelte';
@@ -58,7 +58,26 @@
           />
           Lock aspect to image
         </label>
+        {#if imageState.sourceHQ}
+          <span class="chip hq" title="Sampling from a {imageState.sourceHQ.scale.toFixed(0)}× upscaled source. Click to disable.">
+            <button class="link" onclick={clearSourceHQ}>HQ ×{imageState.sourceHQ.scale.toFixed(0)} ✕</button>
+          </span>
+        {:else}
+          <button
+            class="chip hq-action"
+            disabled={imageState.upscaling}
+            onclick={() => upscaleSource()}
+            title="Send the source to fal.ai's upscaler and resample from the result. The geometry stays the same; only the per-pixel detail changes."
+          >
+            {imageState.upscaling ? 'Upscaling…' : 'Upscale source (HQ)'}
+          </button>
+        {/if}
       </div>
+    {/if}
+    {#if imageState.upscaleError}
+      <p class="error mono" title={imageState.upscaleError}>
+        Upscale failed: {imageState.upscaleError}
+      </p>
     {/if}
   </header>
 
@@ -128,6 +147,39 @@
   .chip.outside {
     border-color: var(--green);
     color: var(--green);
+  }
+  .chip.hq {
+    border-color: var(--warm);
+    color: var(--warm);
+  }
+  .chip.hq .link {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .chip.hq-action {
+    border: 1px solid var(--border);
+    background: none;
+    padding: 0.2em 0.55em;
+    color: var(--fg);
+    font: inherit;
+    cursor: pointer;
+  }
+  .chip.hq-action:disabled {
+    opacity: 0.6;
+    cursor: progress;
+  }
+  .error {
+    margin: 0.4em 0 0;
+    font-size: 0.8rem;
+    color: var(--green);
+    max-width: 60ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .img {
     display: block;

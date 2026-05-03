@@ -17,7 +17,6 @@
    * Inverse map for sampling: (u, v) → c + e^u · (cos v, sin v).
    */
 
-  import { imageState } from '../lib/stores/image.svelte';
   import { pipeline } from '../lib/stores/pipeline.svelte';
   import { renderMappedDroste } from '../lib/math/transforms';
   import Panel from './Panel.svelte';
@@ -47,10 +46,10 @@
   });
 
   $effect(() => {
-    const src = imageState.source;
+    const pixels = pipeline.samplingPixels;
     const droste = pipeline.drosteCtx;
     const d = dims;
-    if (!src || !droste || !d || !canvas) return;
+    if (!pixels || !droste || !d || !canvas) return;
 
     canvas.width = d.W;
     canvas.height = d.H;
@@ -65,7 +64,7 @@
     const vTop = d.vSpan / 2;
 
     const out = ctx.createImageData(d.W, d.H);
-    renderMappedDroste(out, src.pixels, droste, (px, py, s) => {
+    renderMappedDroste(out, pixels, droste, (px, py, s) => {
       const u = uMin + (px / (d.W - 1)) * d.uSpan;
       const v = vTop - (py / (d.H - 1)) * d.vSpan;
       const r = Math.exp(u);

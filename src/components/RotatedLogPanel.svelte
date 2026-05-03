@@ -22,7 +22,6 @@
    * the original log frame, then sample as in panel 1.
    */
 
-  import { imageState } from '../lib/stores/image.svelte';
   import { pipeline } from '../lib/stores/pipeline.svelte';
   import { renderMappedDroste } from '../lib/math/transforms';
   import Panel from './Panel.svelte';
@@ -34,9 +33,9 @@
   let canvas: HTMLCanvasElement | null = $state(null);
 
   $effect(() => {
-    const src = imageState.source;
+    const pixels = pipeline.samplingPixels;
     const droste = pipeline.drosteCtx;
-    if (!src || !droste || !canvas) return;
+    if (!pixels || !droste || !canvas) return;
 
     canvas.width = W;
     canvas.height = H;
@@ -55,7 +54,7 @@
     const uSpan = N_PERIODS * logS;
 
     const out = ctx.createImageData(W, H);
-    renderMappedDroste(out, src.pixels, droste, (px, py, s) => {
+    renderMappedDroste(out, pixels, droste, (px, py, s) => {
       // (u', v') in the rotated frame. Canvas is exactly L tall → one period.
       const uPrime = uMin + (px / (W - 1)) * uSpan;
       const vPrime = -L / 2 + (py / (H - 1)) * L;

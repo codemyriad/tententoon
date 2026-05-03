@@ -38,9 +38,8 @@
    * always exactly at the rect's centre when the rect is centred.)
    */
 
-  import { imageState } from '../lib/stores/image.svelte';
   import { pipeline, STATIC_MAX_W } from '../lib/stores/pipeline.svelte';
-  import { renderMappedDroste } from '../lib/math/transforms';
+  import { sampleDroste, ssOffsetsForFootprint } from '../lib/math/transforms';
   import Panel from './Panel.svelte';
 
   let canvas: HTMLCanvasElement | null = $state(null);
@@ -58,46 +57,90 @@
   });
 
   $effect(() => {
-    const src = imageState.source;
+    const pixels = pipeline.samplingPixels;
     const droste = pipeline.drosteCtx;
     const d = dims;
     const R0 = pipeline.R0;
-    if (!src || !droste || !d || !R0 || !canvas) return;
+    if (!pixels || !droste || !d || !R0 || !canvas) return;
 
     canvas.width = d.W;
     canvas.height = d.H;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const k = droste.logS / (2 * Math.PI);
+    const { cx, cy, logS, rMax } = droste;
+    const { scale } = d;
+    const k = logS / (2 * Math.PI);
     const lnR0 = Math.log(Math.max(R0, 1e-9));
-    const { cx, cy } = droste;
+    const alphaMag = Math.sqrt(1 + k * k);
+    const lnRmax = Math.log(rMax);
 
-    const out = ctx.createImageData(d.W, d.H);
-    renderMappedDroste(out, src.pixels, droste, (px, py, s) => {
-      // Output pixel → working-image coord z = (x, y) (crop-relative).
-      const x = px / d.scale;
-      const y = py / d.scale;
+    /**
+     * Forward Lenstra map with the R₀ orientation correction. Returns the
+     * source coord plus a footprint estimate (source-pixels per output-
+     * canvas-pixel). The footprint formula is |dw/dz|·S^n / canvasScale,
+     * where |dw/dz| = |α|·exp(k·Φ) for w(z) = c+(z−c)^α and n is the
+     * Droste fold count needed to bring the source back into the working
+     * rectangle. Returns null exactly at z = c.
+     */
+    function forward(x: number, y: number): { sx: number; sy: number; footprint: number } | null {
       const dx = x - cx;
       const dy = y - cy;
       const R2 = dx * dx + dy * dy;
-      if (R2 < 1e-12) return false;
-
-      // log(z − c) = lnR + iΦ.
+      if (R2 < 1e-12) return null;
       const lnR = 0.5 * Math.log(R2);
       const Phi = Math.atan2(dy, dx);
-      // α · log = (lnR + k·Φ) + i·(Φ − k·lnR).
-      // Then add the upright-at-R₀ rotation k·lnR₀ to the angle:
-      //   source lnR  = lnR + k·Φ
-      //   source Φ    = Φ − k·(lnR − lnR₀)
       const newLnR = lnR + k * Phi;
       const newPhi = Phi - k * (lnR - lnR0);
-      // exp back to source coords.
       const r = Math.exp(newLnR);
-      s.x = cx + r * Math.cos(newPhi);
-      s.y = cy + r * Math.sin(newPhi);
-      return true;
-    });
+      const sx = cx + r * Math.cos(newPhi);
+      const sy = cy + r * Math.sin(newPhi);
+      const n = Math.max(0, Math.floor((lnRmax - newLnR) / logS));
+      const footprint = (alphaMag * Math.exp(k * Phi + n * logS)) / scale;
+      return { sx, sy, footprint };
+    }
+
+    const out = ctx.createImageData(d.W, d.H);
+    const data = out.data;
+    const rgba: [number, number, number, number] = [0, 0, 0, 0];
+    for (let py = 0; py < d.H; py++) {
+      for (let px = 0; px < d.W; px++) {
+        const idx = (py * d.W + px) << 2;
+        const fwd = forward(px / d.scale, py / d.scale);
+        if (!fwd) {
+          data[idx] = 0; data[idx + 1] = 0; data[idx + 2] = 0; data[idx + 3] = 0;
+          continue;
+        }
+        const offsets = ssOffsetsForFootprint(fwd.footprint);
+        if (!offsets) {
+          if (sampleDroste(pixels, droste, fwd.sx, fwd.sy, rgba)) {
+            data[idx] = rgba[0]; data[idx + 1] = rgba[1];
+            data[idx + 2] = rgba[2]; data[idx + 3] = rgba[3];
+          } else {
+            data[idx] = 0; data[idx + 1] = 0; data[idx + 2] = 0; data[idx + 3] = 0;
+          }
+          continue;
+        }
+        // Adaptive supersampling: re-run the forward map at sub-pixel
+        // offsets within this output pixel and average. Sub-samples that
+        // fall onto the limit point or fail to fold back into the working
+        // rectangle simply don't contribute.
+        let r = 0, g = 0, b = 0, a = 0, count = 0;
+        for (let s = 0; s < offsets.length; s++) {
+          const f = forward((px + offsets[s][0]) / d.scale, (py + offsets[s][1]) / d.scale);
+          if (f && sampleDroste(pixels, droste, f.sx, f.sy, rgba)) {
+            r += rgba[0]; g += rgba[1]; b += rgba[2]; a += rgba[3];
+            count++;
+          }
+        }
+        if (count > 0) {
+          data[idx] = r / count; data[idx + 1] = g / count;
+          data[idx + 2] = b / count; data[idx + 3] = a / count;
+        } else {
+          data[idx] = 0; data[idx + 1] = 0; data[idx + 2] = 0; data[idx + 3] = 0;
+        }
+      }
+    }
     ctx.putImageData(out, 0, 0);
 
     // Mark the limit point c if it's on screen.

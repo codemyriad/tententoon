@@ -30,9 +30,8 @@
    * is just one multiplication and a Droste-folded sample per pixel.
    */
 
-  import { imageState } from '../lib/stores/image.svelte';
   import { pipeline, ANIMATED_MAX_W } from '../lib/stores/pipeline.svelte';
-  import { sampleDroste } from '../lib/math/transforms';
+  import { sampleDroste, SS_OFFSETS_4, SS_OFFSETS_16 } from '../lib/math/transforms';
   import Panel from './Panel.svelte';
 
   let canvas: HTMLCanvasElement | null = $state(null);
@@ -62,29 +61,42 @@
    *   cosPhi[i]  = cos(Φ − k·(lnR − lnR₀))
    *   sinPhi[i]  = sin(...)
    *   valid[i]   = 0 at the limit point itself, 1 elsewhere
+   *   ssTier[i]  = 0 (1×), 1 (4×), 2 (16×) — adaptive supersampling level
    *
    * Per frame we just compute r = baseR[i] · S^t and sample. No log,
-   * atan2, cos, sin, or exp in the hot loop — Droste folding only.
+   * atan2, cos, sin, or exp in the hot loop for the 1× pixels — Droste
+   * folding only. The 4× and 16× pixels (only ever a small region near c)
+   * recompute the forward map per sub-sample.
+   *
+   * SS classification uses worst-case t ∈ [0, 1). The footprint estimate
+   * |α|·exp(k·Φ)·S^n / scale (source-pixels per output-canvas-pixel)
+   * is monotonically non-increasing in t — t shifts source lnR upward,
+   * which shrinks the fold count n by integer steps — so n at t = 0 is
+   * the per-pixel maximum and we classify against that. Pixels we
+   * upgrade to 4× or 16× may then over-supersample slightly at some t,
+   * which is harmless.
    *
    * Rebuilds when geometry, R₀, or canvas dims change.
    */
   const cache = $derived.by(() => {
-    const src = imageState.source;
     const droste = pipeline.drosteCtx;
     const d = dims;
     const R0 = pipeline.R0;
-    if (!src || !droste || !d || !R0) return null;
+    if (!droste || !d || !R0) return null;
 
     const { W, H, scale } = d;
     const N = W * H;
     const k = droste.logS / (2 * Math.PI);
     const lnR0 = Math.log(Math.max(R0, 1e-9));
+    const lnRmax = Math.log(droste.rMax);
+    const alphaMag = Math.sqrt(1 + k * k);
     const { cx, cy } = droste;
 
     const baseR = new Float32Array(N);
     const cosPhi = new Float32Array(N);
     const sinPhi = new Float32Array(N);
     const valid = new Uint8Array(N);
+    const ssTier = new Uint8Array(N);
 
     // (px, py) are CANVAS pixels; (px/scale, py/scale) are WORKING-image
     // pixels (crop-relative). Sampling later goes through droste, which
@@ -98,17 +110,23 @@
         if (R2 < 1e-12) continue; // valid stays 0 → output black
         const lnR = 0.5 * Math.log(R2);
         const Phi = Math.atan2(dy, dx);
+        const baseLnR = lnR + k * Phi;
         const newPhi = Phi - k * (lnR - lnR0);
-        baseR[i] = Math.exp(lnR + k * Phi);
+        baseR[i] = Math.exp(baseLnR);
         cosPhi[i] = Math.cos(newPhi);
         sinPhi[i] = Math.sin(newPhi);
         valid[i] = 1;
+        const n = Math.max(0, Math.floor((lnRmax - baseLnR) / droste.logS));
+        const fp = (alphaMag * Math.exp(k * Phi + n * droste.logS)) / scale;
+        const fp2 = fp * fp;
+        ssTier[i] = fp2 > 4 ? 2 : fp2 > 1 ? 1 : 0;
       }
     }
 
     return {
-      W, H,
-      baseR, cosPhi, sinPhi, valid,
+      W, H, scale,
+      k, lnR0,
+      baseR, cosPhi, sinPhi, valid, ssTier,
       imageData: new ImageData(W, H),
       droste
     };
@@ -137,36 +155,79 @@
   // while playing because changing `t` invalidates this effect.
   $effect(() => {
     const c = cache;
-    const src = imageState.source;
-    if (!c || !src || !canvas) return;
+    const pixels = pipeline.samplingPixels;
+    if (!c || !pixels || !canvas) return;
 
     if (canvas.width !== c.W) canvas.width = c.W;
     if (canvas.height !== c.H) canvas.height = c.H;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const expTShift = Math.exp(t * c.droste.logS); // = S^t
-    const { cx, cy } = c.droste;
+    const droste = c.droste;
+    const expTShift = Math.exp(t * droste.logS); // = S^t
+    const { cx, cy } = droste;
+    const { k, lnR0, scale } = c;
     const data = c.imageData.data;
     const rgba: [number, number, number, number] = [0, 0, 0, 0];
-    const N = c.W * c.H;
+    const W = c.W, H = c.H;
 
-    for (let i = 0; i < N; i++) {
-      const idx = i << 2;
-      if (!c.valid[i]) {
-        data[idx] = 0; data[idx + 1] = 0; data[idx + 2] = 0; data[idx + 3] = 0;
-        continue;
-      }
-      const r = c.baseR[i] * expTShift;
-      const sx = cx + r * c.cosPhi[i];
-      const sy = cy + r * c.sinPhi[i];
-      if (sampleDroste(src.pixels, c.droste, sx, sy, rgba)) {
-        data[idx] = rgba[0];
-        data[idx + 1] = rgba[1];
-        data[idx + 2] = rgba[2];
-        data[idx + 3] = rgba[3];
-      } else {
-        data[idx] = 0; data[idx + 1] = 0; data[idx + 2] = 0; data[idx + 3] = 0;
+    // SS sub-pixel evaluation: re-run the forward map at output offset
+    // (px + ox, py + oy) and Droste-sample. Arrow form (vs `function`)
+    // so TS preserves the non-null narrowing on `pixels` across the
+    // closure. The hot 1× path stays a tight inner loop body below.
+    const sampleAt = (px: number, py: number, ox: number, oy: number): boolean => {
+      const x = (px + ox) / scale;
+      const y = (py + oy) / scale;
+      const dx = x - cx;
+      const dy = y - cy;
+      const R2 = dx * dx + dy * dy;
+      if (R2 < 1e-12) return false;
+      const lnR = 0.5 * Math.log(R2);
+      const Phi = Math.atan2(dy, dx);
+      const newPhi = Phi - k * (lnR - lnR0);
+      const r = Math.exp(lnR + k * Phi) * expTShift;
+      const sx = cx + r * Math.cos(newPhi);
+      const sy = cy + r * Math.sin(newPhi);
+      return sampleDroste(pixels, droste, sx, sy, rgba);
+    };
+
+    for (let py = 0; py < H; py++) {
+      for (let px = 0; px < W; px++) {
+        const i = py * W + px;
+        const idx = i << 2;
+        if (!c.valid[i]) {
+          data[idx] = 0; data[idx + 1] = 0; data[idx + 2] = 0; data[idx + 3] = 0;
+          continue;
+        }
+        const tier = c.ssTier[i];
+        if (tier === 0) {
+          // Cache fast path: no trig, no log — just one mul/add and a
+          // Droste sample. This branch covers the vast majority of pixels.
+          const r = c.baseR[i] * expTShift;
+          const sx = cx + r * c.cosPhi[i];
+          const sy = cy + r * c.sinPhi[i];
+          if (sampleDroste(pixels, droste, sx, sy, rgba)) {
+            data[idx] = rgba[0]; data[idx + 1] = rgba[1];
+            data[idx + 2] = rgba[2]; data[idx + 3] = rgba[3];
+          } else {
+            data[idx] = 0; data[idx + 1] = 0; data[idx + 2] = 0; data[idx + 3] = 0;
+          }
+        } else {
+          const offsets = tier === 1 ? SS_OFFSETS_4 : SS_OFFSETS_16;
+          let r = 0, g = 0, b = 0, a = 0, count = 0;
+          for (let s = 0; s < offsets.length; s++) {
+            if (sampleAt(px, py, offsets[s][0], offsets[s][1])) {
+              r += rgba[0]; g += rgba[1]; b += rgba[2]; a += rgba[3];
+              count++;
+            }
+          }
+          if (count > 0) {
+            data[idx] = r / count; data[idx + 1] = g / count;
+            data[idx + 2] = b / count; data[idx + 3] = a / count;
+          } else {
+            data[idx] = 0; data[idx + 1] = 0; data[idx + 2] = 0; data[idx + 3] = 0;
+          }
+        }
       }
     }
     ctx.putImageData(c.imageData, 0, 0);
