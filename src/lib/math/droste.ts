@@ -55,12 +55,20 @@ function maxCornerDistance(W: number, H: number, c: Point): number {
   return m;
 }
 
-/** Clamp a rectangle (aspect-locked to image aspect) so it stays inside the image. */
+/**
+ * Clamp a rectangle (aspect-locked to image aspect) so it stays inside the
+ * image. Knobs:
+ *   minSFactor — nest must be at least slightly smaller than the image
+ *                (S ≥ 1.05) so there's a real Droste step to look at.
+ *   maxS       — nest can be at most 1/maxS of the image. 200 gives ample
+ *                headroom (a nest as small as 0.5% of the image's long
+ *                side); the rest of the pipeline copes with arbitrary S.
+ */
 export function clampRect(
   image: { width: number; height: number },
   rect: Rect,
   minSFactor = 1.05,
-  maxS = 30
+  maxS = 200
 ): Rect {
   const aspect = image.width / image.height;
   const minW = image.width / maxS;

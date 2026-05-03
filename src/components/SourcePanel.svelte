@@ -1,6 +1,6 @@
 <script lang="ts">
   import { imageState } from '../lib/stores/image.svelte';
-  import { selectionState, initSelection } from '../lib/stores/selection.svelte';
+  import { selectionState, initSelection, setAspectLocked } from '../lib/stores/selection.svelte';
   import { pipeline } from '../lib/stores/pipeline.svelte';
   import RectanglePicker from './RectanglePicker.svelte';
   import Magnifier from './Magnifier.svelte';
@@ -28,6 +28,13 @@
   // since the user is looking at the original.
   const geom = $derived(pipeline.geom);
   const limit = $derived(pipeline.limitInOriginal);
+
+  function onLockChange(e: Event) {
+    const src = imageState.source;
+    if (!src) return;
+    const checked = (e.currentTarget as HTMLInputElement).checked;
+    setAspectLocked({ width: src.width, height: src.height }, checked);
+  }
 </script>
 
 <section class="source">
@@ -43,6 +50,14 @@
         } title="Limit point (pixel coords)">
           c = ({limit.x.toFixed(0)}, {limit.y.toFixed(0)})
         </span>
+        <label class="chip lock" title="When unlocked, the nest can have any aspect; the dashed crop rectangle picks which part of the image is used as the working source.">
+          <input
+            type="checkbox"
+            checked={selectionState.aspectLocked}
+            onchange={onLockChange}
+          />
+          Lock aspect to image
+        </label>
       </div>
     {/if}
   </header>
@@ -55,8 +70,15 @@
           <canvas bind:this={canvas} class="img"></canvas>
         </RectanglePicker>
         <p class="hint muted">
-          Drag the nest to translate · drag a corner to scale (aspect-locked) ·
-          <span class="dot warm"></span> marks the limit point
+          Drag the nest to translate · drag a corner to resize
+          {#if !selectionState.aspectLocked}
+            (free aspect) · the dashed
+            <span class="dot warm"></span> rectangle is the crop — what's used
+            as the working image
+          {:else}
+            (aspect-locked)
+          {/if}
+          · <span class="dot warm"></span> marks the limit point
         </p>
       </div>
       <Magnifier />
