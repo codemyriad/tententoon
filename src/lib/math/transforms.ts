@@ -95,23 +95,34 @@ export function renderMapped(
 }
 
 /**
- * Droste self-similarity context: we PRETEND the source image is invariant
- * under p → c + S·(p − c), i.e. scaling by S around c. `rMax` is the
- * largest radius from c we treat as "still inside the image".
+ * Droste self-similarity context: we PRETEND the working image is invariant
+ * under p → c + S·(p − c), scaling by S around c. The working image is the
+ * user's CROP of the original — when the crop covers the whole image,
+ * "working coords" and "original coords" coincide, but in general working
+ * coords run [0, W)×[0, H) while the original lives at an offset.
+ *
+ *   cx, cy   — limit point in working (crop-relative) coords
+ *   W, H     — working image dimensions (= crop size)
+ *   cropX,   — where the crop sits inside the original; sample positions
+ *   cropY      get translated by (+cropX, +cropY) before reading pixels
  */
 export type DrosteCtx = {
   cx: number;
   cy: number;
   logS: number;
   rMax: number;
+  W: number;
+  H: number;
+  cropX: number;
+  cropY: number;
 };
 
 /**
- * Sample the (faked) Droste tiling. A candidate source point (sx, sy) may
- * be outside the image, or so close to c that there's nothing to see; we
- * scale (sx − c, sy − c) by S^n until it lands in bounds. Among valid n
- * we pick the one with the largest radius — that's the outermost,
- * sharpest equivalent copy.
+ * Sample the (faked) Droste tiling. The candidate (sx, sy) is in working
+ * coords. We scale (sx − c, sy − c) by S^n until the result lands inside
+ * the working rectangle [0, W)×[0, H), then translate to original-image
+ * coords for the actual bilinear read. Among valid n we pick the one with
+ * the largest radius — the outermost, sharpest equivalent copy.
  */
 export function sampleDroste(
   src: Pixels,
@@ -120,8 +131,6 @@ export function sampleDroste(
   sy: number,
   out: [number, number, number, number]
 ): boolean {
-  const W = src.width;
-  const H = src.height;
   const dx = sx - ctx.cx;
   const dy = sy - ctx.cy;
   const r = Math.hypot(dx, dy);
@@ -130,8 +139,8 @@ export function sampleDroste(
     return false;
   }
   // Largest n with r·exp(n·logS) ≤ rMax. Walk inward from there until the
-  // scaled point lands inside the image rectangle. The 10-step cap is
-  // generous: dn > 1 only kicks in when one image dimension is much
+  // scaled point lands inside the working rectangle. The 10-step cap is
+  // generous: dn > 1 only kicks in when one working dimension is much
   // shorter than the other, so the inner ring spills outside it. Falling
   // off the cap leaves the pixel transparent (the only reasonable thing).
   const n0 = Math.floor((Math.log(ctx.rMax) - Math.log(r)) / ctx.logS);
@@ -140,8 +149,8 @@ export function sampleDroste(
     const scale = Math.exp(n * ctx.logS);
     const tx = ctx.cx + dx * scale;
     const ty = ctx.cy + dy * scale;
-    if (tx >= 0 && ty >= 0 && tx <= W - 1 && ty <= H - 1) {
-      sample(src, tx, ty, out);
+    if (tx >= 0 && ty >= 0 && tx <= ctx.W - 1 && ty <= ctx.H - 1) {
+      sample(src, tx + ctx.cropX, ty + ctx.cropY, out);
       return true;
     }
   }

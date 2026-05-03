@@ -48,23 +48,21 @@
 
   $effect(() => {
     const src = imageState.source;
-    const g = pipeline.geom;
+    const droste = pipeline.drosteCtx;
     const d = dims;
-    if (!src || !g || !d || !canvas) return;
+    if (!src || !droste || !d || !canvas) return;
 
     canvas.width = d.W;
     canvas.height = d.H;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // u sweeps [uMin, uMax]; uMax is the outermost radius of the source.
+    // u sweeps [uMin, uMax]; uMax is the outermost radius of the working image.
     // v sweeps [-vSpan/2, +vSpan/2]; sin/cos handle the angle wrap.
-    const cx = g.limit.x;
-    const cy = g.limit.y;
-    const uMax = Math.log(Math.max(g.rMax, 1));
+    const { cx, cy, rMax } = droste;
+    const uMax = Math.log(Math.max(rMax, 1));
     const uMin = uMax - d.uSpan;
     const vTop = d.vSpan / 2;
-    const droste = { cx, cy, logS: g.logS, rMax: g.rMax };
 
     const out = ctx.createImageData(d.W, d.H);
     renderMappedDroste(out, src.pixels, droste, (px, py, s) => {

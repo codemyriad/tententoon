@@ -16,29 +16,59 @@ function identityKey(id: Identity): string {
   return id.kind === 'url' ? `url:${id.url}` : 'upload';
 }
 
-export function readRect(id: Identity): Rect | null {
+/**
+ * Persisted selection. `nest` alone (a bare Rect) is the legacy shape
+ * (matching the original "nest = the only thing the user picked, aspect
+ * locked" UX); we read it and reconstruct the rest. `nest + crop +
+ * aspectLocked` is the current shape.
+ */
+export type StoredSelection = {
+  nest: Rect;
+  crop: Rect;
+  aspectLocked: boolean;
+};
+
+function isRect(p: unknown): p is Rect {
+  const r = p as Rect | null;
+  return (
+    !!r &&
+    typeof r.x === 'number' &&
+    typeof r.y === 'number' &&
+    typeof r.w === 'number' &&
+    typeof r.h === 'number'
+  );
+}
+
+export function readSelection(id: Identity): StoredSelection | Rect | null {
   try {
     const raw = localStorage.getItem(RECT_PREFIX + identityKey(id));
     if (!raw) return null;
     const p = JSON.parse(raw);
-    if (
-      typeof p?.x === 'number' &&
-      typeof p?.y === 'number' &&
-      typeof p?.w === 'number' &&
-      typeof p?.h === 'number'
-    ) {
-      return p as Rect;
+    if (isRect(p?.nest) && isRect(p?.crop) && typeof p?.aspectLocked === 'boolean') {
+      return { nest: p.nest, crop: p.crop, aspectLocked: p.aspectLocked };
     }
+    if (isRect(p)) return p; // legacy nest-only format
     return null;
   } catch {
     return null;
   }
 }
 
-export function writeRect(id: Identity, rect: Rect): void {
+export function writeSelection(id: Identity, sel: StoredSelection): void {
   try {
-    localStorage.setItem(RECT_PREFIX + identityKey(id), JSON.stringify(rect));
+    localStorage.setItem(RECT_PREFIX + identityKey(id), JSON.stringify(sel));
   } catch {}
+}
+
+/**
+ * Legacy helper retained for callers that only want the nest as a bare
+ * Rect (e.g. App.svelte's preset path). Returns the nest from whichever
+ * storage shape is present.
+ */
+export function readRect(id: Identity): Rect | null {
+  const sel = readSelection(id);
+  if (!sel) return null;
+  return 'nest' in sel ? sel.nest : sel;
 }
 
 export function readLast(): Identity | null {

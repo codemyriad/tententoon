@@ -1,20 +1,25 @@
 <script lang="ts">
   import { imageState } from '../lib/stores/image.svelte';
   import { selectionState } from '../lib/stores/selection.svelte';
-  import { drosteGeometry } from '../lib/math/droste';
+  import { pipeline } from '../lib/stores/pipeline.svelte';
 
   /**
    * Continuous Droste zoom.
    *
-   * At time t, we draw the source image at multiple nested levels k = 0, 1, 2, …
-   * Each level k is drawn at scale σ_fit · S^t / S^k, with the limit point c
-   * pinned to the same canvas anchor. Level 0 is the outermost (fit-to-canvas
-   * at t = 0); each subsequent level lands exactly in the inner rectangle of
-   * the previous one, so we synthesise an infinitely nested Droste image even
-   * when the source only has one physical level of self-similarity.
+   * At time t, we draw the WORKING image (the user's crop) at multiple
+   * nested levels k = 0, 1, 2, … Each level k is drawn at scale
+   * σ_fit · S^t / S^k, with the limit point c pinned to the same canvas
+   * anchor. Level 0 is the outermost (fit-to-canvas at t = 0); each
+   * subsequent level lands exactly in the inner rectangle of the previous
+   * one, so we synthesise an infinitely nested Droste image even when the
+   * source only has one physical level of self-similarity.
    *
-   * As t grows from 0 to 1, every level is multiplied by S — level k at t = 1
-   * matches level (k-1) at t = 0 — so the loop closes seamlessly.
+   * As t grows from 0 to 1, every level is multiplied by S — level k at
+   * t = 1 matches level (k-1) at t = 0 — so the loop closes seamlessly.
+   *
+   * When the crop covers the whole image (locked-aspect mode) this reduces
+   * to drawing src.bitmap directly. Otherwise we use the 9-arg drawImage
+   * form to render only the crop's sub-rectangle.
    */
 
   let canvas: HTMLCanvasElement | null = $state(null);
@@ -22,12 +27,10 @@
   let playing = $state(true);
   let cycleSeconds = $state(8);
 
-  const geom = $derived.by(() => {
-    const src = imageState.source;
-    const r = selectionState.rect;
-    if (!src || !r) return null;
-    return drosteGeometry({ width: src.width, height: src.height }, r);
-  });
+  // Use the shared pipeline geom — `geom.limit` is in CROP coords, which is
+  // exactly what we need below since every drawImage call places the
+  // working-image's top-left at our level anchor.
+  const geom = $derived(pipeline.geom);
 
   $effect(() => {
     if (!canvas) return;
@@ -61,7 +64,8 @@
   $effect(() => {
     const src = imageState.source;
     const g = geom;
-    if (!canvas || !src || !g) return;
+    const crop = selectionState.crop;
+    if (!canvas || !src || !g || !crop) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     void t;
@@ -73,26 +77,25 @@
     ctx.fillStyle = '#0a1016';
     ctx.fillRect(0, 0, W, H);
 
-    // Fit the source image to the canvas (letterbox).
-    const srcAspect = src.width / src.height;
+    // Fit the WORKING image (the crop) to the canvas (letterbox).
+    const workAspect = crop.w / crop.h;
     const canvasAspect = W / H;
-    let fitW: number, fitH: number, offX: number, offY: number;
-    if (canvasAspect > srcAspect) {
+    let fitW: number, fitH: number;
+    if (canvasAspect > workAspect) {
       fitH = H;
-      fitW = H * srcAspect;
+      fitW = H * workAspect;
     } else {
       fitW = W;
-      fitH = W / srcAspect;
+      fitH = W / workAspect;
     }
-    offX = (W - fitW) / 2;
-    offY = (H - fitH) / 2;
-    const sigmaFit = fitW / src.width; // canvas-px per image-px when rendered fit-to-canvas
+    const offX = (W - fitW) / 2;
+    const offY = (H - fitH) / 2;
+    const sigmaFit = fitW / crop.w; // canvas-px per working-px when fit-to-canvas
 
-    // Anchor: where c appears on canvas at t = 0 (i.e. in the fitted source).
+    // Anchor: where c appears on canvas at t = 0 (in fitted working coords).
     const anchorX = offX + g.limit.x * sigmaFit;
     const anchorY = offY + g.limit.y * sigmaFit;
 
-    // Clip to the letterbox region so levels don't spill onto the background.
     ctx.save();
     ctx.beginPath();
     ctx.rect(offX, offY, fitW, fitH);
@@ -102,17 +105,19 @@
 
     const zoom = Math.pow(g.S, t);
 
-    // Draw outermost first so nested levels paint on top of the inner rectangle.
-    // Stop when the rendered image shrinks below ~1.5 canvas pixels — invisible.
-    for (let k = 0; k < 32; k++) {
-      const scale = (sigmaFit * zoom) / Math.pow(g.S, k);
-      const w = src.width * scale;
-      if (w < 1.5) break;
-      const h = src.height * scale;
+    // Each level draws the crop's sub-rectangle of the source bitmap, scaled
+    // around the limit point so that level k+1 lands inside level k's nest.
+    for (let level = 0; level < 32; level++) {
+      const scale = (sigmaFit * zoom) / Math.pow(g.S, level);
+      const w = crop.w * scale;
+      if (w < 1.5) break; // sub-pixel, invisible
+      const h = crop.h * scale;
       const dx = anchorX - g.limit.x * scale;
       const dy = anchorY - g.limit.y * scale;
       try {
-        ctx.drawImage(src.bitmap, dx, dy, w, h);
+        // 9-arg drawImage: copy [crop.x, crop.y, crop.w, crop.h] of the
+        // bitmap into [dx, dy, w, h] of the canvas.
+        ctx.drawImage(src.bitmap, crop.x, crop.y, crop.w, crop.h, dx, dy, w, h);
       } catch {
         // non-fatal
       }
@@ -156,7 +161,7 @@
     <canvas
       bind:this={canvas}
       class="view"
-      style="aspect-ratio: {imageState.source.width} / {imageState.source.height};"
+      style="aspect-ratio: {selectionState.crop?.w ?? imageState.source.width} / {selectionState.crop?.h ?? imageState.source.height};"
     ></canvas>
     <p class="muted hint">
       Source drawn at scale σ · S<sup>t</sup> / S<sup>k</sup> for every level k, all

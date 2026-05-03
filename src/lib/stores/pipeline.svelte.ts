@@ -1,10 +1,14 @@
 /**
  * Shared derived state for every panel in the Droste pipeline.
  *
- * Each panel wants the same two things: the Droste geometry for the
- * current (image, rectangle) pair, and the reference radius R₀ used to
- * cancel the Lenstra twist. Computing them in every panel meant five
- * copies of the same eight-line block; this collects them in one place.
+ * Two raw inputs come from the user — the nest (inner self-similar
+ * rectangle) and the crop (sub-rectangle of the original to use as the
+ * working image). From those we derive everything every panel needs:
+ *
+ *   workingSize  — dimensions of the working image (= the crop)
+ *   geom         — DrosteGeometry in WORKING (crop-relative) coords
+ *   R0           — reference radius for the Escher panel's twist correction
+ *   drosteCtx    — ready-to-pass context for sampleDroste / renderMappedDroste
  *
  * Render budget per panel — pixels of canvas width:
  *
@@ -14,6 +18,7 @@
  */
 
 import { drosteGeometry, type DrosteGeometry } from '../math/droste';
+import type { DrosteCtx } from '../math/transforms';
 import { imageState } from './image.svelte';
 import { selectionState } from './selection.svelte';
 
@@ -21,12 +26,40 @@ export const STATIC_MAX_W = 560;
 export const ANIMATED_MAX_W = 360;
 
 class Pipeline {
-  /** Geometry of the current (image, rectangle); null until both are set. */
+  /** Working image dimensions: equals the user's crop (= full image when locked). */
+  readonly workingSize = $derived.by((): { width: number; height: number } | null => {
+    const crop = selectionState.crop;
+    if (!crop) return null;
+    return { width: crop.w, height: crop.h };
+  });
+
+  /**
+   * Geometry of the (image, rectangle) pair, computed in WORKING coords:
+   * `geom.limit` is offset from the crop's top-left, not from the original
+   * image's top-left. Add selectionState.crop.{x,y} to get original coords.
+   */
   readonly geom = $derived.by((): DrosteGeometry | null => {
-    const src = imageState.source;
-    const r = selectionState.rect;
-    if (!src || !r) return null;
-    return drosteGeometry({ width: src.width, height: src.height }, r);
+    const nest = selectionState.nest;
+    const crop = selectionState.crop;
+    if (!nest || !crop) return null;
+    const nestInCrop = {
+      x: nest.x - crop.x,
+      y: nest.y - crop.y,
+      w: nest.w,
+      h: nest.h
+    };
+    return drosteGeometry({ width: crop.w, height: crop.h }, nestInCrop);
+  });
+
+  /**
+   * Limit point in ORIGINAL-image coords, for overlays drawn over the
+   * source image (the picker, the source panel chip).
+   */
+  readonly limitInOriginal = $derived.by(() => {
+    const g = this.geom;
+    const crop = selectionState.crop;
+    if (!g || !crop) return null;
+    return { x: g.limit.x + crop.x, y: g.limit.y + crop.y };
   });
 
   /**
@@ -39,6 +72,27 @@ class Pipeline {
     const g = this.geom;
     if (!g) return null;
     return g.rMax / Math.sqrt(g.S);
+  });
+
+  /**
+   * Pre-built DrosteCtx for callers of sampleDroste / renderMappedDroste.
+   * Carries the crop offset so sampling indexes into the original
+   * ImageData while the math runs in working coords.
+   */
+  readonly drosteCtx = $derived.by((): DrosteCtx | null => {
+    const g = this.geom;
+    const crop = selectionState.crop;
+    if (!g || !crop) return null;
+    return {
+      cx: g.limit.x,
+      cy: g.limit.y,
+      logS: g.logS,
+      rMax: g.rMax,
+      W: crop.w,
+      H: crop.h,
+      cropX: crop.x,
+      cropY: crop.y
+    };
   });
 }
 

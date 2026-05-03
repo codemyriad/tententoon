@@ -35,8 +35,8 @@
 
   $effect(() => {
     const src = imageState.source;
-    const g = pipeline.geom;
-    if (!src || !g || !canvas) return;
+    const droste = pipeline.drosteCtx;
+    if (!src || !droste || !canvas) return;
 
     canvas.width = W;
     canvas.height = H;
@@ -45,16 +45,14 @@
 
     // Rotation: β = atan(logS / 2π). The diagonal lattice vector (logS, 2π)
     // rotates onto (0, L) with L = √(logS² + 4π²) — purely vertical.
-    const beta = Math.atan2(g.logS, 2 * Math.PI);
+    const beta = Math.atan2(droste.logS, 2 * Math.PI);
     const cosB = Math.cos(beta);
     const sinB = Math.sin(beta);
-    const L = Math.hypot(g.logS, 2 * Math.PI);
+    const L = Math.hypot(droste.logS, 2 * Math.PI);
 
-    const cx = g.limit.x;
-    const cy = g.limit.y;
-    const uMin = Math.log(Math.max(g.rMax, 1)) - N_PERIODS * g.logS;
-    const uSpan = N_PERIODS * g.logS;
-    const droste = { cx, cy, logS: g.logS, rMax: g.rMax };
+    const { cx, cy, rMax, logS } = droste;
+    const uMin = Math.log(Math.max(rMax, 1)) - N_PERIODS * logS;
+    const uSpan = N_PERIODS * logS;
 
     const out = ctx.createImageData(W, H);
     renderMappedDroste(out, src.pixels, droste, (px, py, s) => {

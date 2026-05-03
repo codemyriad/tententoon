@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Rect } from '../lib/math/droste';
-  import { drosteGeometry } from '../lib/math/droste';
-  import { selectionState, setRect } from '../lib/stores/selection.svelte';
+  import { selectionState, setNest } from '../lib/stores/selection.svelte';
+  import { pipeline } from '../lib/stores/pipeline.svelte';
   import { interactionState } from '../lib/stores/interaction.svelte';
 
   import type { Snippet } from 'svelte';
@@ -24,12 +24,13 @@
 
   const aspect = $derived(image.width / image.height);
 
-  const geom = $derived(
-    selectionState.rect ? drosteGeometry(image, selectionState.rect) : null
-  );
+  // We draw the limit-point crosshair on the ORIGINAL image, so use the
+  // original-coord helper from the pipeline store.
+  const geom = $derived(pipeline.geom);
+  const limit = $derived(pipeline.limitInOriginal);
 
   const ghostRects = $derived.by(() => {
-    const r = selectionState.rect;
+    const r = selectionState.nest;
     if (!r) return [] as { rect: Rect; opacity: number }[];
     const out: { rect: Rect; opacity: number }[] = [];
     // f(p) = topLeft + p/S — apply successively to the inner rect itself
@@ -57,21 +58,21 @@
   }
 
   function onBodyPointerDown(e: PointerEvent) {
-    if (!selectionState.rect) return;
+    if (!selectionState.nest) return;
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     drag = {
       type: 'body',
-      startRect: { ...selectionState.rect },
+      startRect: { ...selectionState.nest },
       startPx: clientToImage(e)
     };
     interactionState.active = true;
   }
 
   function onCornerPointerDown(e: PointerEvent, corner: 0 | 1 | 2 | 3) {
-    if (!selectionState.rect) return;
+    if (!selectionState.nest) return;
     e.stopPropagation();
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
-    const r = selectionState.rect;
+    const r = selectionState.nest;
     // opposite corner stays fixed
     const opposite = {
       x: corner === 0 || corner === 3 ? r.x + r.w : r.x,
@@ -88,11 +89,11 @@
   function onPointerMove(e: PointerEvent) {
     const p = clientToImage(e);
     interactionState.focus = p;
-    if (!drag || !selectionState.rect) return;
+    if (!drag || !selectionState.nest) return;
     if (drag.type === 'body') {
       const dx = p.x - drag.startPx.x;
       const dy = p.y - drag.startPx.y;
-      setRect(image, {
+      setNest(image, {
         x: drag.startRect.x + dx,
         y: drag.startRect.y + dy,
         w: drag.startRect.w,
@@ -106,7 +107,7 @@
       const h = w / aspect;
       const x = drag.signX === 1 ? drag.opposite.x : drag.opposite.x - w;
       const y = drag.signY === 1 ? drag.opposite.y : drag.opposite.y - h;
-      setRect(image, { x, y, w, h });
+      setNest(image, { x, y, w, h });
       // keep the magnifier on the corner that's actually moving
       interactionState.focus = {
         x: drag.signX === 1 ? x + w : x,
@@ -131,8 +132,8 @@
 
   // Edge-arrow geometry for when c is outside the image.
   const limitOutside = $derived.by(() => {
-    if (!geom) return null;
-    const { x, y } = geom.limit;
+    if (!limit) return null;
+    const { x, y } = limit;
     if (x >= 0 && x <= image.width && y >= 0 && y <= image.height) return null;
     const cx = Math.max(0, Math.min(image.width, x));
     const cy = Math.max(0, Math.min(image.height, y));
@@ -154,8 +155,8 @@
 >
   {@render children?.()}
 
-  {#if selectionState.rect}
-    {@const r = selectionState.rect}
+  {#if selectionState.nest}
+    {@const r = selectionState.nest}
     <svg
       class="overlay"
       viewBox="0 0 {image.width} {image.height}"
@@ -235,8 +236,8 @@
       <!-- limit point crosshair -->
       {#if geom}
         {@const inside = !limitOutside}
-        {@const cx = inside ? geom.limit.x : limitOutside!.edge.x}
-        {@const cy = inside ? geom.limit.y : limitOutside!.edge.y}
+        {@const cx = inside ? limit!.x : limitOutside!.edge.x}
+        {@const cy = inside ? limit!.y : limitOutside!.edge.y}
         {@const arm = Math.max(image.width, image.height) * 0.015}
         <g class="limit" transform="translate({cx} {cy})" pointer-events="none">
           <circle

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { imageState } from '../lib/stores/image.svelte';
   import { selectionState, initSelection } from '../lib/stores/selection.svelte';
-  import { drosteGeometry } from '../lib/math/droste';
+  import { pipeline } from '../lib/stores/pipeline.svelte';
   import RectanglePicker from './RectanglePicker.svelte';
   import Magnifier from './Magnifier.svelte';
 
@@ -24,26 +24,24 @@
     ctx.drawImage(src.bitmap, 0, 0);
   });
 
-  const geom = $derived.by(() => {
-    const src = imageState.source;
-    const r = selectionState.rect;
-    if (!src || !r) return null;
-    return drosteGeometry({ width: src.width, height: src.height }, r);
-  });
+  // For the chips, we want c in ORIGINAL-image coords (not crop-relative)
+  // since the user is looking at the original.
+  const geom = $derived(pipeline.geom);
+  const limit = $derived(pipeline.limitInOriginal);
 </script>
 
 <section class="source">
   <header>
     <h2>Source + nest</h2>
-    {#if geom}
+    {#if geom && limit}
       <div class="chips mono">
         <span class="chip" title="Scale factor">S = {geom.S.toFixed(2)}</span>
         <span class="chip" title="Natural log of S">log S = {geom.logS.toFixed(3)}</span>
         <span class="chip" class:outside={
-          geom.limit.x < 0 || geom.limit.x > (imageState.source?.width ?? 0) ||
-          geom.limit.y < 0 || geom.limit.y > (imageState.source?.height ?? 0)
+          limit.x < 0 || limit.x > (imageState.source?.width ?? 0) ||
+          limit.y < 0 || limit.y > (imageState.source?.height ?? 0)
         } title="Limit point (pixel coords)">
-          c = ({geom.limit.x.toFixed(0)}, {geom.limit.y.toFixed(0)})
+          c = ({limit.x.toFixed(0)}, {limit.y.toFixed(0)})
         </span>
       </div>
     {/if}

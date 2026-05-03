@@ -45,38 +45,37 @@
 
   let canvas: HTMLCanvasElement | null = $state(null);
 
+  // Canvas dims follow the WORKING image (= crop), not the original.
   const dims = $derived.by(() => {
-    const src = imageState.source;
-    if (!src) return null;
-    const scale = Math.min(1, STATIC_MAX_W / src.width);
+    const ws = pipeline.workingSize;
+    if (!ws) return null;
+    const scale = Math.min(1, STATIC_MAX_W / ws.width);
     return {
-      W: Math.round(src.width * scale),
-      H: Math.round(src.height * scale),
+      W: Math.round(ws.width * scale),
+      H: Math.round(ws.height * scale),
       scale
     };
   });
 
   $effect(() => {
     const src = imageState.source;
-    const g = pipeline.geom;
+    const droste = pipeline.drosteCtx;
     const d = dims;
     const R0 = pipeline.R0;
-    if (!src || !g || !d || !R0 || !canvas) return;
+    if (!src || !droste || !d || !R0 || !canvas) return;
 
     canvas.width = d.W;
     canvas.height = d.H;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const k = g.logS / (2 * Math.PI);
+    const k = droste.logS / (2 * Math.PI);
     const lnR0 = Math.log(Math.max(R0, 1e-9));
-    const cx = g.limit.x;
-    const cy = g.limit.y;
-    const droste = { cx, cy, logS: g.logS, rMax: g.rMax };
+    const { cx, cy } = droste;
 
     const out = ctx.createImageData(d.W, d.H);
     renderMappedDroste(out, src.pixels, droste, (px, py, s) => {
-      // Output pixel → image-space coord z = (x, y).
+      // Output pixel → working-image coord z = (x, y) (crop-relative).
       const x = px / d.scale;
       const y = py / d.scale;
       const dx = x - cx;

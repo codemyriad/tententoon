@@ -1,6 +1,6 @@
 <script lang="ts">
   import { imageState } from '../lib/stores/image.svelte';
-  import { selectionState, setRect } from '../lib/stores/selection.svelte';
+  import { selectionState, setNest } from '../lib/stores/selection.svelte';
   import { interactionState } from '../lib/stores/interaction.svelte';
   import type { Rect } from '../lib/math/droste';
 
@@ -32,7 +32,7 @@
   // Baseline zoom that grows gently with S so the loupe reveals detail at
   // extreme placement without pixel-stretching at modest S.
   const autoZoom = $derived.by(() => {
-    const r = selectionState.rect;
+    const r = selectionState.nest;
     const src = imageState.source;
     if (!r || !src) return 1.5;
     const S = src.width / r.w;
@@ -45,7 +45,7 @@
   // otherwise on the rectangle centre.
   const focus = $derived.by(() => {
     if (interactionState.focus) return interactionState.focus;
-    const r = selectionState.rect;
+    const r = selectionState.nest;
     if (!r) return null;
     return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
   });
@@ -53,7 +53,7 @@
   $effect(() => {
     const src = imageState.source;
     const f = focus;
-    const r = selectionState.rect;
+    const r = selectionState.nest;
     if (!canvas || !src || !f) return;
 
     const dpr = window.devicePixelRatio || 1;
@@ -134,12 +134,12 @@
   }
 
   function onPointerDown(e: PointerEvent) {
-    if (!imageState.source || !selectionState.rect || !focus) return;
+    if (!imageState.source || !selectionState.nest || !focus) return;
     const f = focus;
     const z = zoom;
     const cs = eventCss(e);
     const img = cssToImage(cs.x, cs.y, f, z);
-    const r = selectionState.rect;
+    const r = selectionState.nest;
 
     // Corner hit-test in CSS distance.
     const corners: { x: number; y: number; i: 0 | 1 | 2 | 3 }[] = [
@@ -192,7 +192,7 @@
   }
 
   function onPointerMoveCanvas(e: PointerEvent) {
-    if (!imageState.source || !selectionState.rect) return;
+    if (!imageState.source || !selectionState.nest) return;
     const src = imageState.source;
     if (!drag) return; // passive hover must NOT pan the magnifier away from the nest
     const cs = eventCss(e);
@@ -201,7 +201,7 @@
     if (drag.type === 'body') {
       const dx = img.x - drag.startImg.x;
       const dy = img.y - drag.startImg.y;
-      setRect(
+      setNest(
         { width: src.width, height: src.height },
         {
           x: drag.startRect.x + dx,
@@ -218,7 +218,7 @@
       const h = w / aspect;
       const x = drag.signX === 1 ? drag.opposite.x : drag.opposite.x - w;
       const y = drag.signY === 1 ? drag.opposite.y : drag.opposite.y - h;
-      setRect({ width: src.width, height: src.height }, { x, y, w, h });
+      setNest({ width: src.width, height: src.height }, { x, y, w, h });
       // pan the loupe to keep the moving corner at centre
       interactionState.focus = {
         x: drag.signX === 1 ? x + w : x,

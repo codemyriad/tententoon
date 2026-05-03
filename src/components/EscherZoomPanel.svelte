@@ -43,13 +43,14 @@
   // when the user releases the slider.
   let wasPlayingBeforeScrub = false;
 
+  // Canvas dims follow the WORKING image (= crop), not the original.
   const dims = $derived.by(() => {
-    const src = imageState.source;
-    if (!src) return null;
-    const scale = Math.min(1, ANIMATED_MAX_W / src.width);
+    const ws = pipeline.workingSize;
+    if (!ws) return null;
+    const scale = Math.min(1, ANIMATED_MAX_W / ws.width);
     return {
-      W: Math.round(src.width * scale),
-      H: Math.round(src.height * scale),
+      W: Math.round(ws.width * scale),
+      H: Math.round(ws.height * scale),
       scale
     };
   });
@@ -69,23 +70,25 @@
    */
   const cache = $derived.by(() => {
     const src = imageState.source;
-    const g = pipeline.geom;
+    const droste = pipeline.drosteCtx;
     const d = dims;
     const R0 = pipeline.R0;
-    if (!src || !g || !d || !R0) return null;
+    if (!src || !droste || !d || !R0) return null;
 
     const { W, H, scale } = d;
     const N = W * H;
-    const k = g.logS / (2 * Math.PI);
+    const k = droste.logS / (2 * Math.PI);
     const lnR0 = Math.log(Math.max(R0, 1e-9));
-    const cx = g.limit.x;
-    const cy = g.limit.y;
+    const { cx, cy } = droste;
 
     const baseR = new Float32Array(N);
     const cosPhi = new Float32Array(N);
     const sinPhi = new Float32Array(N);
     const valid = new Uint8Array(N);
 
+    // (px, py) are CANVAS pixels; (px/scale, py/scale) are WORKING-image
+    // pixels (crop-relative). Sampling later goes through droste, which
+    // adds the crop offset before reading the original ImageData.
     for (let py = 0; py < H; py++) {
       for (let px = 0; px < W; px++) {
         const i = py * W + px;
@@ -107,7 +110,7 @@
       W, H,
       baseR, cosPhi, sinPhi, valid,
       imageData: new ImageData(W, H),
-      droste: { cx, cy, logS: g.logS, rMax: g.rMax }
+      droste
     };
   });
 
@@ -135,17 +138,15 @@
   $effect(() => {
     const c = cache;
     const src = imageState.source;
-    const g = pipeline.geom;
-    if (!c || !src || !g || !canvas) return;
+    if (!c || !src || !canvas) return;
 
     if (canvas.width !== c.W) canvas.width = c.W;
     if (canvas.height !== c.H) canvas.height = c.H;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const expTShift = Math.exp(t * g.logS); // = S^t
-    const cx = g.limit.x;
-    const cy = g.limit.y;
+    const expTShift = Math.exp(t * c.droste.logS); // = S^t
+    const { cx, cy } = c.droste;
     const data = c.imageData.data;
     const rgba: [number, number, number, number] = [0, 0, 0, 0];
     const N = c.W * c.H;
