@@ -40,7 +40,7 @@
 
   import { imageState } from '../lib/stores/image.svelte';
   import { pipeline, STATIC_MAX_W } from '../lib/stores/pipeline.svelte';
-  import { renderMappedDroste } from '../lib/math/transforms';
+  import { sampleDrosteMipped } from '../lib/math/transforms';
   import Panel from './Panel.svelte';
 
   let canvas: HTMLCanvasElement | null = $state(null);
@@ -58,11 +58,11 @@
   });
 
   $effect(() => {
-    const src = imageState.source;
     const droste = pipeline.drosteCtx;
+    const mips = pipeline.mipmap;
     const d = dims;
     const R0 = pipeline.R0;
-    if (!src || !droste || !d || !R0 || !canvas) return;
+    if (!droste || !mips || !d || !R0 || !canvas) return;
 
     canvas.width = d.W;
     canvas.height = d.H;
@@ -72,32 +72,47 @@
     const k = droste.logS / (2 * Math.PI);
     const lnR0 = Math.log(Math.max(R0, 1e-9));
     const { cx, cy } = droste;
+    // Same anti-aliasing setup as the spiral-zoom panel, but with t = 0:
+    // mipmap level = log₂(|α|/canvasScale) + n·log₂S, where n is the
+    // per-pixel Droste fold added inside sampleDrosteMipped.
+    const log2S = droste.logS / Math.LN2;
+    const baseLevel = 0.5 * Math.log2(1 + k * k) - Math.log2(d.scale);
 
     const out = ctx.createImageData(d.W, d.H);
-    renderMappedDroste(out, src.pixels, droste, (px, py, s) => {
-      // Output pixel → working-image coord z = (x, y) (crop-relative).
-      const x = px / d.scale;
-      const y = py / d.scale;
-      const dx = x - cx;
-      const dy = y - cy;
-      const R2 = dx * dx + dy * dy;
-      if (R2 < 1e-12) return false;
-
-      // log(z − c) = lnR + iΦ.
-      const lnR = 0.5 * Math.log(R2);
-      const Phi = Math.atan2(dy, dx);
-      // α · log = (lnR + k·Φ) + i·(Φ − k·lnR).
-      // Then add the upright-at-R₀ rotation k·lnR₀ to the angle:
-      //   source lnR  = lnR + k·Φ
-      //   source Φ    = Φ − k·(lnR − lnR₀)
-      const newLnR = lnR + k * Phi;
-      const newPhi = Phi - k * (lnR - lnR0);
-      // exp back to source coords.
-      const r = Math.exp(newLnR);
-      s.x = cx + r * Math.cos(newPhi);
-      s.y = cy + r * Math.sin(newPhi);
-      return true;
-    });
+    const data = out.data;
+    const rgba: [number, number, number, number] = [0, 0, 0, 0];
+    for (let py = 0; py < d.H; py++) {
+      for (let px = 0; px < d.W; px++) {
+        const idx = (py * d.W + px) << 2;
+        // Output pixel → working-image coord z (crop-relative).
+        const x = px / d.scale;
+        const y = py / d.scale;
+        const dx = x - cx;
+        const dy = y - cy;
+        const R2 = dx * dx + dy * dy;
+        if (R2 < 1e-12) {
+          data[idx] = 0; data[idx + 1] = 0; data[idx + 2] = 0; data[idx + 3] = 0;
+          continue;
+        }
+        // α · log(z − c) = (lnR + k·Φ) + i·(Φ − k·lnR).
+        // Plus the upright-at-R₀ rotation k·lnR₀ in the angle.
+        const lnR = 0.5 * Math.log(R2);
+        const Phi = Math.atan2(dy, dx);
+        const newLnR = lnR + k * Phi;
+        const newPhi = Phi - k * (lnR - lnR0);
+        const r = Math.exp(newLnR);
+        const sx = cx + r * Math.cos(newPhi);
+        const sy = cy + r * Math.sin(newPhi);
+        if (sampleDrosteMipped(mips, droste, sx, sy, baseLevel, log2S, rgba)) {
+          data[idx] = rgba[0];
+          data[idx + 1] = rgba[1];
+          data[idx + 2] = rgba[2];
+          data[idx + 3] = rgba[3];
+        } else {
+          data[idx] = 0; data[idx + 1] = 0; data[idx + 2] = 0; data[idx + 3] = 0;
+        }
+      }
+    }
     ctx.putImageData(out, 0, 0);
 
     // Mark the limit point c if it's on screen.
