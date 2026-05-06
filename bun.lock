@@ -4,6 +4,9 @@
   "workspaces": {
     "": {
       "name": "escher-print-gallery-explorable",
+      "dependencies": {
+        "twgl.js": "^7.0.0",
+      },
       "devDependencies": {
         "@sveltejs/vite-plugin-svelte": "^4.0.0",
         "@tsconfig/svelte": "^5.0.4",
@@ -191,6 +194,8 @@
     "svelte-check": ["svelte-check@4.4.6", "", { "dependencies": { "@jridgewell/trace-mapping": "^0.3.25", "chokidar": "^4.0.1", "fdir": "^6.2.0", "picocolors": "^1.0.0", "sade": "^1.7.4" }, "peerDependencies": { "svelte": "^4.0.0 || ^5.0.0-next.0", "typescript": ">=5.0.0" }, "bin": { "svelte-check": "bin/svelte-check" } }, "sha512-kP1zG81EWaFe9ZyTv4ZXv44Csi6Pkdpb7S3oj6m+K2ec/IcDg/a8LsFsnVLqm2nxtkSwsd5xPj/qFkTBgXHXjg=="],
 
     "tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
+
+    "twgl.js": ["twgl.js@7.0.0", "", {}, "sha512-9HHZ8emdZb2nKPU0FDIGDlkp6AD9rWFv7ThqdbmUqyBhD3WTQpLN+89w4B+YshGwD1fL6PMVpVKZqC0pikgmcA=="],
 
     "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 

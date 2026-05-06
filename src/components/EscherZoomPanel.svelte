@@ -18,26 +18,28 @@
    *
    *     (λ^t)^α = exp(t·c̃·logS·α) = exp(t·logS) = S^t      (since c̃·α = 1)
    *
-   * So animating the spiral zoom is exactly the regular Escher
-   * renderer with one extra term added to source lnR:
+   * So animating the spiral zoom is exactly the regular Escher renderer
+   * with one extra term added to source lnR:
    *
    *     source lnR  = lnR + k·Φ + t·logS
    *     source Φ    = Φ − k·(lnR − lnR₀)
    *
-   * The only thing that changes per frame is t. So we precompute the
-   * frame-invariant per-pixel work once (whenever the image, rectangle,
-   * or canvas size changes) into typed arrays, and the inner frame loop
-   * is just one multiplication and a Droste-folded sample per pixel.
+   * Rendering goes through the tiered backend in src/lib/render/escher-zoom:
+   * WebGL2 in a Worker → WebGL2 on main → CPU on main, with automatic
+   * demotion if a tier fails to init or the GL context is lost. The CPU
+   * tier is the original JS pixel loop, kept verbatim.
    */
 
   import { pipeline, ANIMATED_MAX_W } from '../lib/stores/pipeline.svelte';
-  import { sampleDroste, SS_OFFSETS_4, SS_OFFSETS_16 } from '../lib/math/transforms';
+  import { createEscherZoomRenderer } from '../lib/render/escher-zoom';
+  import type { BackendTier } from '../lib/render/types';
   import Panel from './Panel.svelte';
 
   let canvas: HTMLCanvasElement | null = $state(null);
   let t = $state(0);
   let playing = $state(true);
   let cycleSeconds = $state(8);
+  let activeTier: BackendTier | null = $state(null);
   // Captured at scrub start so we can restore the prior playback state
   // when the user releases the slider.
   let wasPlayingBeforeScrub = false;
@@ -54,88 +56,9 @@
     };
   });
 
-  /**
-   * Per-pixel cache. Frame-invariant work goes here:
-   *
-   *   baseR[i]   = exp(lnR + k·Φ)        — source radius at t = 0
-   *   cosPhi[i]  = cos(Φ − k·(lnR − lnR₀))
-   *   sinPhi[i]  = sin(...)
-   *   valid[i]   = 0 at the limit point itself, 1 elsewhere
-   *   ssTier[i]  = 0 (1×), 1 (4×), 2 (16×) — adaptive supersampling level
-   *
-   * Per frame we just compute r = baseR[i] · S^t and sample. No log,
-   * atan2, cos, sin, or exp in the hot loop for the 1× pixels — Droste
-   * folding only. The 4× and 16× pixels (only ever a small region near c)
-   * recompute the forward map per sub-sample.
-   *
-   * SS classification uses worst-case t ∈ [0, 1). The footprint estimate
-   * |α|·exp(k·Φ)·S^n / scale (source-pixels per output-canvas-pixel)
-   * is monotonically non-increasing in t — t shifts source lnR upward,
-   * which shrinks the fold count n by integer steps — so n at t = 0 is
-   * the per-pixel maximum and we classify against that. Pixels we
-   * upgrade to 4× or 16× may then over-supersample slightly at some t,
-   * which is harmless.
-   *
-   * Rebuilds when geometry, R₀, or canvas dims change.
-   */
-  const cache = $derived.by(() => {
-    const droste = pipeline.drosteCtx;
-    const d = dims;
-    const R0 = pipeline.R0;
-    if (!droste || !d || !R0) return null;
-
-    const { W, H, scale } = d;
-    const N = W * H;
-    const k = droste.logS / (2 * Math.PI);
-    const lnR0 = Math.log(Math.max(R0, 1e-9));
-    const lnRmax = Math.log(droste.rMax);
-    const alphaMag = Math.sqrt(1 + k * k);
-    const { cx, cy } = droste;
-
-    const baseR = new Float32Array(N);
-    const cosPhi = new Float32Array(N);
-    const sinPhi = new Float32Array(N);
-    const valid = new Uint8Array(N);
-    const ssTier = new Uint8Array(N);
-
-    // (px, py) are CANVAS pixels; (px/scale, py/scale) are WORKING-image
-    // pixels (crop-relative). Sampling later goes through droste, which
-    // adds the crop offset before reading the original ImageData.
-    for (let py = 0; py < H; py++) {
-      for (let px = 0; px < W; px++) {
-        const i = py * W + px;
-        const dx = px / scale - cx;
-        const dy = py / scale - cy;
-        const R2 = dx * dx + dy * dy;
-        if (R2 < 1e-12) continue; // valid stays 0 → output black
-        const lnR = 0.5 * Math.log(R2);
-        const Phi = Math.atan2(dy, dx);
-        const baseLnR = lnR + k * Phi;
-        const newPhi = Phi - k * (lnR - lnR0);
-        baseR[i] = Math.exp(baseLnR);
-        cosPhi[i] = Math.cos(newPhi);
-        sinPhi[i] = Math.sin(newPhi);
-        valid[i] = 1;
-        const n = Math.max(0, Math.floor((lnRmax - baseLnR) / droste.logS));
-        const fp = (alphaMag * Math.exp(k * Phi + n * droste.logS)) / scale;
-        const fp2 = fp * fp;
-        ssTier[i] = fp2 > 4 ? 2 : fp2 > 1 ? 1 : 0;
-      }
-    }
-
-    return {
-      W, H, scale,
-      k, lnR0,
-      baseR, cosPhi, sinPhi, valid, ssTier,
-      imageData: new ImageData(W, H),
-      droste
-    };
-  });
-
   // Animation clock — drives t. Pause halts it without losing position.
   // dt is capped at 1/30 s so coming back from a hidden tab (where rAF
-  // was throttled) doesn't catapult t forward in one frame; the
-  // animation just smoothly picks up where it left off.
+  // was throttled) doesn't catapult t forward in one frame.
   const MAX_FRAME_DT = 1 / 30;
   $effect(() => {
     if (!playing) return;
@@ -151,86 +74,63 @@
     return () => cancelAnimationFrame(raf);
   });
 
-  // Render — reads `t` and `cache` and writes pixels. Re-runs every frame
-  // while playing because changing `t` invalidates this effect.
+  // The active renderer. Held in a $state-like holder so the render effect
+  // re-runs once it's bound. Plain `let` is enough — we read it inside the
+  // render effect AFTER reading the reactive inputs, so reads here don't
+  // re-fire the effect on their own.
+  let renderer: ReturnType<typeof createEscherZoomRenderer> | null = $state(null);
+
+  // Bind a renderer to the canvas once the canvas mounts. Recreate on
+  // unmount/remount; the renderer's internal tier-demotion handles backend
+  // failures, so no need to re-create on those.
+  // Optional URL override for testing each tier on a single machine:
+  //   ?renderer=webgl2-worker / webgl2-main / cpu-main
+  // Useful when the page lands on cpu-main (e.g. SwiftShader) but you want
+  // to verify the WebGL2 path actually compiles and runs. Skipped if absent.
+  function forcedTier(): BackendTier | undefined {
+    if (typeof window === 'undefined') return undefined;
+    const v = new URLSearchParams(window.location.search).get('renderer');
+    if (v === 'webgl2-worker' || v === 'webgl2-main' || v === 'cpu-main') return v;
+    return undefined;
+  }
+
   $effect(() => {
-    const c = cache;
-    const pixels = pipeline.samplingPixels;
-    if (!c || !pixels || !canvas) return;
-
-    if (canvas.width !== c.W) canvas.width = c.W;
-    if (canvas.height !== c.H) canvas.height = c.H;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const droste = c.droste;
-    const expTShift = Math.exp(t * droste.logS); // = S^t
-    const { cx, cy } = droste;
-    const { k, lnR0, scale } = c;
-    const data = c.imageData.data;
-    const rgba: [number, number, number, number] = [0, 0, 0, 0];
-    const W = c.W, H = c.H;
-
-    // SS sub-pixel evaluation: re-run the forward map at output offset
-    // (px + ox, py + oy) and Droste-sample. Arrow form (vs `function`)
-    // so TS preserves the non-null narrowing on `pixels` across the
-    // closure. The hot 1× path stays a tight inner loop body below.
-    const sampleAt = (px: number, py: number, ox: number, oy: number): boolean => {
-      const x = (px + ox) / scale;
-      const y = (py + oy) / scale;
-      const dx = x - cx;
-      const dy = y - cy;
-      const R2 = dx * dx + dy * dy;
-      if (R2 < 1e-12) return false;
-      const lnR = 0.5 * Math.log(R2);
-      const Phi = Math.atan2(dy, dx);
-      const newPhi = Phi - k * (lnR - lnR0);
-      const r = Math.exp(lnR + k * Phi) * expTShift;
-      const sx = cx + r * Math.cos(newPhi);
-      const sy = cy + r * Math.sin(newPhi);
-      return sampleDroste(pixels, droste, sx, sy, rgba);
+    if (!canvas) return;
+    const r = createEscherZoomRenderer({
+      onTier: (tier) => (activeTier = tier),
+      forceTier: forcedTier()
+    });
+    renderer = r;
+    void r.init(canvas);
+    return () => {
+      r.dispose();
+      renderer = null;
+      activeTier = null;
     };
+  });
 
-    for (let py = 0; py < H; py++) {
-      for (let px = 0; px < W; px++) {
-        const i = py * W + px;
-        const idx = i << 2;
-        if (!c.valid[i]) {
-          data[idx] = 0; data[idx + 1] = 0; data[idx + 2] = 0; data[idx + 3] = 0;
-          continue;
-        }
-        const tier = c.ssTier[i];
-        if (tier === 0) {
-          // Cache fast path: no trig, no log — just one mul/add and a
-          // Droste sample. This branch covers the vast majority of pixels.
-          const r = c.baseR[i] * expTShift;
-          const sx = cx + r * c.cosPhi[i];
-          const sy = cy + r * c.sinPhi[i];
-          if (sampleDroste(pixels, droste, sx, sy, rgba)) {
-            data[idx] = rgba[0]; data[idx + 1] = rgba[1];
-            data[idx + 2] = rgba[2]; data[idx + 3] = rgba[3];
-          } else {
-            data[idx] = 0; data[idx + 1] = 0; data[idx + 2] = 0; data[idx + 3] = 0;
-          }
-        } else {
-          const offsets = tier === 1 ? SS_OFFSETS_4 : SS_OFFSETS_16;
-          let r = 0, g = 0, b = 0, a = 0, count = 0;
-          for (let s = 0; s < offsets.length; s++) {
-            if (sampleAt(px, py, offsets[s][0], offsets[s][1])) {
-              r += rgba[0]; g += rgba[1]; b += rgba[2]; a += rgba[3];
-              count++;
-            }
-          }
-          if (count > 0) {
-            data[idx] = r / count; data[idx + 1] = g / count;
-            data[idx + 2] = b / count; data[idx + 3] = a / count;
-          } else {
-            data[idx] = 0; data[idx + 1] = 0; data[idx + 2] = 0; data[idx + 3] = 0;
-          }
-        }
-      }
-    }
-    ctx.putImageData(c.imageData, 0, 0);
+  // Render — feeds the active backend with the current pipeline state and
+  // animation phase. Re-runs whenever any tracked input changes (t every
+  // frame while playing). The renderer itself decides what to do with it
+  // (GPU draw call, JS pixel loop, etc.). Init may not have completed yet;
+  // worker init is async so the first few render calls may queue up
+  // internally — `renderer.render` is safe to call early.
+  $effect(() => {
+    const pixels = pipeline.samplingPixels;
+    const droste = pipeline.drosteCtx;
+    const d = dims;
+    const R0 = pipeline.R0;
+    const r = renderer;
+    if (!pixels || !droste || !d || !R0 || !r) return;
+    r.render({
+      pixels,
+      ctx: droste,
+      R0,
+      W: d.W,
+      H: d.H,
+      scale: d.scale,
+      t
+    });
   });
 
   function togglePlay() { playing = !playing; }
@@ -252,6 +152,11 @@
         <span class="chip" title="arg(λ) = k·logS / (1 + k²)">
           arg(λ) = {lambdaArgDeg.toFixed(1)}°
         </span>
+        {#if activeTier}
+          <span class="chip" title="Active rendering backend">
+            backend = {activeTier}
+          </span>
+        {/if}
       </div>
     {/if}
   {/snippet}

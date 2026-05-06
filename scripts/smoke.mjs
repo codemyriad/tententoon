@@ -131,6 +131,42 @@ async function main() {
     check('selection.svelte.ts readable for read-after-write check', false, e.message);
   }
 
+  // 6. Render-backend wiring. EscherZoomPanel must use the tier factory so
+  //    WebGL2 → CPU demotion happens automatically. A panel that calls a
+  //    backend constructor directly bypasses the fallback path and would
+  //    crash on machines where WebGL2 returns null.
+  try {
+    const panel = await fs.readFile(
+      new URL('../src/components/EscherZoomPanel.svelte', import.meta.url),
+      'utf8'
+    );
+    check(
+      'EscherZoomPanel routes through createEscherZoomRenderer (tier-aware)',
+      /createEscherZoomRenderer\s*\(/.test(panel),
+      'panel imports a backend directly — bypasses tier demotion'
+    );
+  } catch (e) {
+    check('EscherZoomPanel.svelte readable', false, e.message);
+  }
+
+  // 7. Capability detection must refuse software WebGL2. Software-only
+  //    contexts (SwiftShader, llvmpipe) are slower than the JS pixel loop
+  //    for our shader; refusing them is the difference between "works
+  //    poorly" and "works fast on a different tier".
+  try {
+    const caps = await fs.readFile(
+      new URL('../src/lib/render/capabilities.ts', import.meta.url),
+      'utf8'
+    );
+    check(
+      'capability detection refuses software WebGL2',
+      /SwiftShader|llvmpipe|software/i.test(caps),
+      'software-renderer refusal not found — risk: slow rasteriser path is preferred over CPU JS'
+    );
+  } catch (e) {
+    check('capabilities.ts readable', false, e.message);
+  }
+
   if (failures > 0) {
     console.error(`\n${failures} check(s) failed`);
     process.exit(1);
