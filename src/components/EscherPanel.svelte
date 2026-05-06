@@ -142,21 +142,6 @@
       }
     }
     ctx.putImageData(out, 0, 0);
-
-    // Mark the limit point c if it's on screen.
-    const lx = cx * d.scale;
-    const ly = cy * d.scale;
-    if (lx >= 0 && lx <= d.W && ly >= 0 && ly <= d.H) {
-      ctx.strokeStyle = 'rgba(255, 184, 92, 0.9)';
-      ctx.lineWidth = 1.25;
-      ctx.beginPath();
-      ctx.arc(lx, ly, 5, 0, Math.PI * 2);
-      ctx.moveTo(lx - 9, ly);
-      ctx.lineTo(lx + 9, ly);
-      ctx.moveTo(lx, ly - 9);
-      ctx.lineTo(lx, ly + 9);
-      ctx.stroke();
-    }
   });
 </script>
 

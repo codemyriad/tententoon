@@ -2,9 +2,10 @@ import type { Rect } from '../math/droste';
 import {
   loadUploadBlob,
   readLast,
-  readRect,
+  readSelection,
   saveUploadBlob,
-  writeLast
+  writeLast,
+  type StoredSelection
 } from '../persistence';
 
 export type SourceImage = {
@@ -14,8 +15,12 @@ export type SourceImage = {
   width: number;
   height: number;
   url: string;
-  /** Pre-computed self-similar rectangle, if the image is a known Droste. */
-  presetRect?: Rect;
+  /**
+   * Initial selection for this image. Accepts the new full-state shape
+   * (nest + crop + aspectLocked) or the legacy nest-only Rect; selection.svelte.ts
+   * normalises both in initSelection.
+   */
+  presetSelection?: StoredSelection | Rect;
 };
 
 function extractPixels(bitmap: ImageBitmap): ImageData {
@@ -57,7 +62,10 @@ function revokePrevious() {
   }
 }
 
-export async function loadImageFromUrl(url: string, presetRect?: Rect) {
+export async function loadImageFromUrl(
+  url: string,
+  presetSelection?: StoredSelection | Rect
+) {
   imageState.loading = true;
   imageState.error = null;
   try {
@@ -67,7 +75,14 @@ export async function loadImageFromUrl(url: string, presetRect?: Rect) {
     const bitmap = await createImageBitmap(blob);
     const pixels = extractPixels(bitmap);
     revokePrevious();
-    imageState.source = { bitmap, pixels, width: bitmap.width, height: bitmap.height, url, presetRect };
+    imageState.source = {
+      bitmap,
+      pixels,
+      width: bitmap.width,
+      height: bitmap.height,
+      url,
+      presetSelection
+    };
     imageState.sourceHQ = null;
     imageState.upscaleError = null;
     writeLast({ kind: 'url', url });
@@ -168,7 +183,7 @@ export function clearSourceHQ(): void {
 export async function restoreLastSession(): Promise<boolean> {
   const last = readLast();
   if (!last) return false;
-  const savedRect = readRect(last) ?? undefined;
+  const saved = readSelection(last) ?? undefined;
   if (last.kind === 'upload') {
     try {
       const blob = await loadUploadBlob();
@@ -183,7 +198,7 @@ export async function restoreLastSession(): Promise<boolean> {
         width: bitmap.width,
         height: bitmap.height,
         url,
-        presetRect: savedRect
+        presetSelection: saved
       };
       imageState.sourceHQ = null;
       imageState.upscaleError = null;
@@ -193,7 +208,7 @@ export async function restoreLastSession(): Promise<boolean> {
     }
   }
   try {
-    await loadImageFromUrl(last.url, savedRect);
+    await loadImageFromUrl(last.url, saved);
     return imageState.source?.url === last.url;
   } catch {
     return false;

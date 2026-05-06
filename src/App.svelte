@@ -7,31 +7,53 @@
   import EscherZoomPanel from './components/EscherZoomPanel.svelte';
   import ZoomPreview from './components/ZoomPreview.svelte';
   import { imageState, loadImageFromUrl, restoreLastSession } from './lib/stores/image.svelte';
-  import { identityOf, readRect } from './lib/persistence';
+  import { identityOf, readSelection, type StoredSelection } from './lib/persistence';
 
   const EXAMPLE_URL = '/Droste_1260359-nevit.jpg';
-  // Template-matched inner rectangle for the Wikipedia example (S ≈ 1.88).
-  const EXAMPLE_PRESET = { x: 300, y: 297, w: 680, h: 510 };
   const LOCAL_URL = '/droste-image.jpg';
+
+  // Default starting selection for the example image (1280×960). The nest is
+  // shifted slightly off image-aspect, the crop is the matching minimum
+  // letterbox, and aspectLocked is off — chosen to land on a visually nice
+  // S ≈ 2.11 / logS ≈ 0.747 with c near the photo's natural focal point.
+  const EXAMPLE_DEFAULT: StoredSelection = {
+    nest: {
+      x: 343.20995532865345,
+      y: 334.7223994894703,
+      w: 583.5417996171027,
+      h: 454.86917677089986
+    },
+    crop: { x: 24.21841241336756, y: 0, w: 1231.5631751732649, h: 960 },
+    aspectLocked: false
+  };
 
   // Derived from the loaded image — single source of truth for whether the
   // attribution footer should show. Replaces a manually-maintained boolean
   // that had to be set in three branches of the loader.
   const usingExample = $derived(imageState.source?.url === EXAMPLE_URL);
 
+  // One-shot sentinel. The bootstrap effect tracks reactive state that the
+  // loader itself mutates (source / loading / error), so without this it can
+  // re-fire mid-load and relaunch the loader. A plain `let` is non-reactive,
+  // so it doesn't add to the effect's dep set and can't trigger re-runs.
+  let bootstrapped = false;
+
   $effect(() => {
-    if (imageState.source || imageState.loading) return;
+    if (bootstrapped || imageState.source) return;
+    bootstrapped = true;
     (async () => {
       if (await restoreLastSession()) return;
-      // Prefer a local (gitignored) image if present; otherwise the committed example.
-      const head = await fetch(LOCAL_URL, { method: 'HEAD' }).catch(() => null);
-      if (head && head.ok) {
-        const saved = readRect(identityOf(LOCAL_URL)) ?? undefined;
-        await loadImageFromUrl(LOCAL_URL, saved);
-      } else {
-        const saved = readRect(identityOf(EXAMPLE_URL)) ?? EXAMPLE_PRESET;
-        await loadImageFromUrl(EXAMPLE_URL, saved);
-      }
+      // Try the optional local override first. If it isn't present, Vite's
+      // SPA fallback returns text/html — loadImageFromUrl will throw on
+      // decode and set imageState.error. We clear and fall through. No HEAD
+      // probe: HEAD doesn't disambiguate the SPA fallback any better than
+      // GET, and a single round-trip is simpler.
+      const localPreset = readSelection(identityOf(LOCAL_URL)) ?? undefined;
+      await loadImageFromUrl(LOCAL_URL, localPreset);
+      if (imageState.source?.url === LOCAL_URL) return;
+      imageState.error = null;
+      const examplePreset = readSelection(identityOf(EXAMPLE_URL)) ?? EXAMPLE_DEFAULT;
+      await loadImageFromUrl(EXAMPLE_URL, examplePreset);
     })();
   });
 </script>

@@ -20,7 +20,7 @@
 import type { Rect } from '../math/droste';
 import { clampRect } from '../math/droste';
 import { imageState } from './image.svelte';
-import { identityOf, writeSelection } from '../persistence';
+import { identityOf, writeSelection, type StoredSelection } from '../persistence';
 
 export type SelectionState = {
   nest: Rect | null;
@@ -31,22 +31,45 @@ export type SelectionState = {
 export const selectionState = $state<SelectionState>({
   nest: null,
   crop: null,
-  aspectLocked: true
+  aspectLocked: false
 });
 
 /**
- * Initialise from a fresh image, optionally with a saved nest as preset.
- * Always starts in aspect-locked mode (crop = whole image), matching the
- * original UX. Unlocking is an explicit user action.
+ * Initialise from a fresh image. The preset may be:
+ *   - a full StoredSelection — applied verbatim (saved sessions, presets
+ *     with custom crop / aspectLocked)
+ *   - a Rect — legacy nest-only persistence; we derive crop + lock state
+ *   - undefined — start from a centred default nest
+ *
+ * Compute everything into locals, then write the store last. NEVER read
+ * back from `selectionState` after writing in the same call: the caller
+ * is a $effect, and a read-after-write makes that effect track the just-
+ * written state. Since helpers return fresh object references, tracking
+ * them would re-fire the effect → unbounded loop → page freeze.
  */
 export function initSelection(
   image: { width: number; height: number },
-  preset?: Rect
+  preset?: StoredSelection | Rect
 ) {
-  const nest = preset ?? defaultNest(image);
-  selectionState.nest = clampRect(image, nest);
-  selectionState.crop = wholeImage(image);
-  selectionState.aspectLocked = true;
+  let nest: Rect;
+  let crop: Rect;
+  let aspectLocked: boolean;
+
+  if (preset && 'nest' in preset && 'crop' in preset) {
+    nest = preset.nest;
+    crop = preset.crop;
+    aspectLocked = preset.aspectLocked;
+  } else {
+    const nestPreset = preset ?? defaultNest(image);
+    const localNest = clampNestFree(image, nestPreset);
+    crop = fitCropToNest(image, localNest, null);
+    nest = ensureNestInside(localNest, crop);
+    aspectLocked = false;
+  }
+
+  selectionState.aspectLocked = aspectLocked;
+  selectionState.crop = crop;
+  selectionState.nest = nest;
 }
 
 /**
