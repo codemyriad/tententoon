@@ -36,10 +36,13 @@
     const pixels = pipeline.samplingPixels;
     const droste = pipeline.drosteCtx;
     if (!pixels || !droste || !canvas) return;
+    const cv = canvas;
 
-    canvas.width = W;
-    canvas.height = H;
-    const ctx = canvas.getContext('2d');
+    // rAF-coalesce: see EscherPanel.svelte for rationale.
+    const raf = requestAnimationFrame(() => {
+    cv.width = W;
+    cv.height = H;
+    const ctx = cv.getContext('2d');
     if (!ctx) return;
 
     // Rotation: β = atan(logS / 2π). The diagonal lattice vector (logS, 2π)
@@ -77,6 +80,8 @@
     ctx.lineTo(W, H / 2 + 0.5);
     ctx.stroke();
     ctx.setLineDash([]);
+    });
+    return () => cancelAnimationFrame(raf);
   });
 </script>
 

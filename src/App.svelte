@@ -7,7 +7,7 @@
   import EscherZoomPanel from './components/EscherZoomPanel.svelte';
   import ZoomPreview from './components/ZoomPreview.svelte';
   import { imageState, loadImageFromUrl, restoreLastSession } from './lib/stores/image.svelte';
-  import { identityOf, readSelection, type StoredSelection } from './lib/persistence';
+  import { identityOf, readSelection, writeSelection, type StoredSelection } from './lib/persistence';
 
   const EXAMPLE_URL = `${import.meta.env.BASE_URL}Droste_1260359-nevit.jpg`;
   const LOCAL_URL = `${import.meta.env.BASE_URL}droste-image.jpg`;
@@ -64,7 +64,12 @@
       await loadImageFromUrl(LOCAL_URL, localPreset);
       if (imageState.source?.url === LOCAL_URL) return;
       imageState.error = null;
-      const examplePreset = readSelection(identityOf(EXAMPLE_URL)) ?? EXAMPLE_DEFAULT;
+      // Persist EXAMPLE_DEFAULT the first time we use it, so a subsequent
+      // visit's restoreLastSession finds the same selection instead of
+      // falling through to initSelection's generic centred default.
+      const storedExample = readSelection(identityOf(EXAMPLE_URL));
+      if (!storedExample) writeSelection(identityOf(EXAMPLE_URL), EXAMPLE_DEFAULT);
+      const examplePreset = storedExample ?? EXAMPLE_DEFAULT;
       await loadImageFromUrl(EXAMPLE_URL, examplePreset);
     })();
   });

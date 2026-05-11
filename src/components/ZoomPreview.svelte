@@ -30,6 +30,9 @@
   // crop's aspect changes the CSS aspect-ratio). The render effect reads
   // it so it runs once more with the up-to-date canvas dimensions.
   let resizeTick = $state(0);
+  // Captured at scrub start so the prior playback state is restored when
+  // the user releases the slider. Same pattern as EscherZoomPanel.
+  let wasPlayingBeforeScrub = false;
 
   // Use the shared pipeline geom — `geom.limit` is in CROP coords, which is
   // exactly what we need below since every drawImage call places the
@@ -160,7 +163,9 @@
           max="1"
           step="0.001"
           bind:value={t}
-          onpointerdown={() => (playing = false)}
+          onpointerdown={() => { wasPlayingBeforeScrub = playing; playing = false; }}
+          onpointerup={() => { playing = wasPlayingBeforeScrub; }}
+          onpointercancel={() => { playing = wasPlayingBeforeScrub; }}
         />
         <span>t = {t.toFixed(3)}</span>
       </label>

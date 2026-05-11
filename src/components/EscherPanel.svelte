@@ -62,10 +62,17 @@
     const d = dims;
     const R0 = pipeline.R0;
     if (!pixels || !droste || !d || !R0 || !canvas) return;
+    const cv = canvas;
 
-    canvas.width = d.W;
-    canvas.height = d.H;
-    const ctx = canvas.getContext('2d');
+    // Coalesce renders via rAF. Without this, every pointermove during a
+    // nest drag re-fires this effect, and the synchronous pixel loop below
+    // (~30–130 ms with supersampling) saturates the main thread. The
+    // cleanup cancels any not-yet-fired frame on the next state change so
+    // only the LATEST snapshot ever renders.
+    const raf = requestAnimationFrame(() => {
+    cv.width = d.W;
+    cv.height = d.H;
+    const ctx = cv.getContext('2d');
     if (!ctx) return;
 
     const { cx, cy, logS, rMax } = droste;
@@ -142,6 +149,8 @@
       }
     }
     ctx.putImageData(out, 0, 0);
+    });
+    return () => cancelAnimationFrame(raf);
   });
 </script>
 

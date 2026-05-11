@@ -57,9 +57,13 @@ export const imageState = $state<{
 });
 
 function revokePrevious() {
-  if (imageState.source?.url?.startsWith('blob:')) {
-    URL.revokeObjectURL(imageState.source.url);
-  }
+  const prev = imageState.source;
+  if (!prev) return;
+  if (prev.url.startsWith('blob:')) URL.revokeObjectURL(prev.url);
+  // Release the decoded bitmap's underlying memory. Without this, switching
+  // images repeatedly leaks the previous bitmap (tens of MB each) until GC
+  // — which it isn't urged to do, since ImageBitmap isn't a JS-heap object.
+  prev.bitmap.close?.();
 }
 
 export async function loadImageFromUrl(

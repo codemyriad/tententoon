@@ -70,11 +70,13 @@ export function initSelection(
   selectionState.aspectLocked = aspectLocked;
   selectionState.crop = crop;
   selectionState.nest = nest;
-  // Persist the initial selection too. Otherwise a preset-driven default
-  // (e.g. EXAMPLE_DEFAULT) is only in memory: navigating away and back
-  // calls restoreLastSession → readSelection → null → initSelection runs
-  // the generic centred-default branch instead of the preset.
-  persist();
+  // Intentionally NO persist() call here, NO function calls of any kind.
+  // initSelection runs inside SourcePanel's $effect. Any function call after
+  // the writes above could read selectionState transitively, which would add
+  // selectionState.{nest,crop,aspectLocked} to the effect's dep set — every
+  // user drag would then re-fire this effect and snap the selection back to
+  // the preset. (Preset-driven defaults are persisted at the choose site in
+  // App.svelte instead.)
 }
 
 /**

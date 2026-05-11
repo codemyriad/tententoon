@@ -50,10 +50,13 @@
     const droste = pipeline.drosteCtx;
     const d = dims;
     if (!pixels || !droste || !d || !canvas) return;
+    const cv = canvas;
 
-    canvas.width = d.W;
-    canvas.height = d.H;
-    const ctx = canvas.getContext('2d');
+    // rAF-coalesce: see EscherPanel.svelte for rationale.
+    const raf = requestAnimationFrame(() => {
+    cv.width = d.W;
+    cv.height = d.H;
+    const ctx = cv.getContext('2d');
     if (!ctx) return;
 
     // u sweeps [uMin, uMax]; uMax is the outermost radius of the working image.
@@ -93,6 +96,8 @@
       ctx.stroke();
     }
     ctx.setLineDash([]);
+    });
+    return () => cancelAnimationFrame(raf);
   });
 </script>
 

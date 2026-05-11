@@ -97,35 +97,44 @@ async function main() {
     check('App.svelte readable for static checks', false, e.message);
   }
 
-  // 5. initSelection must NOT read selectionState after writing to it.
-  //    A read-after-write makes the calling $effect track that property as
-  //    a dependency, and the next call writes a fresh object reference,
-  //    re-firing the effect → infinite loop → page freeze, F12 dead, full
-  //    renderer crash. This bit us once; the pattern is subtle enough to
-  //    warrant a lint-style guard.
+  // 5. initSelection must NOT read selectionState after writing to it — and
+  //    the direct-read check isn't enough. We've now been bitten twice:
+  //    v1: a literal `selectionState.X` read after a write (caught by the
+  //        original regex).
+  //    v2: a call to persist() that itself reads selectionState — invisible
+  //        to a single-line regex, same disastrous effect (every drag re-fires
+  //        SourcePanel's $effect, snaps the selection back to the preset).
+  //    Both fail in the same way: page freeze / F12-dead / renderer crash.
+  //
+  //    Enforced rule (stricter than v1): after the first `selectionState.X = ...`
+  //    line, the body may contain ONLY further such assignments, comments, blank
+  //    lines, or the closing brace. Any function call or other token is the bug.
+  //    This is overly conservative but easy to read and easy to follow — and
+  //    initSelection has no legitimate reason to do anything else at that point.
   try {
     const sel = await fs.readFile(new URL('../src/lib/stores/selection.svelte.ts', import.meta.url), 'utf8');
     const initBody = sel.match(/export function initSelection\([^)]*\)\s*{([\s\S]*?)\n}/)?.[1] ?? '';
-    // Find the first line that writes `selectionState.<prop> = ...`. After
-    // that point, any non-assignment read of `selectionState.` is the bug.
     const lines = initBody.split('\n');
-    const firstWriteIdx = lines.findIndex((l) => /\bselectionState\.\w+\s*=/.test(l));
+    const firstWriteIdx = lines.findIndex((l) => /\bselectionState\.\w+\s*=(?!=)/.test(l));
     let badLine = -1;
+    let badReason = '';
     if (firstWriteIdx >= 0) {
       for (let i = firstWriteIdx + 1; i < lines.length; i++) {
-        // Reads = `selectionState.X` not followed by `=` (and not `==`/`===`).
-        // Writes = `selectionState.X = ...` (allowed).
-        const stripped = lines[i].replace(/selectionState\.\w+\s*=(?!=)/g, '');
-        if (/\bselectionState\./.test(stripped)) {
-          badLine = i;
-          break;
-        }
+        const line = lines[i];
+        if (/^\s*$/.test(line)) continue;                                // blank
+        if (/^\s*\/\//.test(line)) continue;                             // // comment
+        if (/^\s*[*/]/.test(line)) continue;                             // block-comment line
+        if (/^\s*}\s*$/.test(line)) continue;                            // closing brace
+        if (/^\s*selectionState\.\w+\s*=(?!=)/.test(line)) continue;     // further writes
+        badLine = i;
+        badReason = 'unexpected token after writes — only further `selectionState.X = ...` assignments are allowed (no function calls; they could transitively read selectionState)';
+        break;
       }
     }
     check(
-      'initSelection has no read-after-write on selectionState',
+      'initSelection writes selectionState then does nothing else',
       badLine === -1,
-      badLine >= 0 ? `line ${badLine + 1} of initSelection reads selectionState after a write — see selection.svelte.ts` : ''
+      badLine >= 0 ? `line ${badLine + 1} of initSelection: ${badReason}` : ''
     );
   } catch (e) {
     check('selection.svelte.ts readable for read-after-write check', false, e.message);
