@@ -89,6 +89,32 @@
     | { kind: 'handle'; opposite: { x: number; y: number }; signX: -1 | 1; signY: -1 | 1; centerStart: { x: number; y: number } | null };
   let drag: DragKind | null = null;
   let dragMods = $state({ shift: false, alt: false });
+  // Cursor follows hover state when not dragging: resize cursors over the
+  // 8 handles, `move` over the rect body, crosshair (rect tool) or
+  // default (other tools) elsewhere. During a drag we leave the cursor
+  // alone so the gesture's affordance is stable.
+  let cursor = $state('default');
+
+  function handleCursor(name: string): string {
+    if (name === 'nw' || name === 'se') return 'nwse-resize';
+    if (name === 'ne' || name === 'sw') return 'nesw-resize';
+    if (name === 'n' || name === 's') return 'ns-resize';
+    if (name === 'e' || name === 'w') return 'ew-resize';
+    return 'default';
+  }
+
+  function updateCursor(e: PointerEvent) {
+    if (drag) return;
+    if (!ready || !viewport) { cursor = 'default'; return; }
+    const r = viewport.getBoundingClientRect();
+    const cssX = e.clientX - r.left;
+    const cssY = e.clientY - r.top;
+    const h = hitHandle(cssX, cssY);
+    if (h) { cursor = handleCursor(h); return; }
+    const img = eventToImage(e);
+    if (img && hasRect && inRect(img)) { cursor = 'move'; return; }
+    cursor = ui.tool === 'rect' ? 'crosshair' : 'default';
+  }
 
   /** Convert a pointer event into image-pixel coordinates. */
   function eventToImage(e: PointerEvent): { x: number; y: number } | null {
@@ -165,6 +191,9 @@
     dragMods = { shift: e.shiftKey, alt: e.altKey };
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
 
+    // Priority: handle > body > marquee. Tool only affects fallback.
+    // Old logic re-marquee'd inside an existing rect under the rect tool,
+    // wiping the rect to 0×0 the instant the user clicked on it.
     const handle = hitHandle(cssX, cssY);
     if (handle) {
       const r = doc.rect;
@@ -176,23 +205,21 @@
       drag = { kind: 'handle', opposite: { x: oppX, y: oppY }, signX, signY, centerStart };
       return;
     }
-    if (hasRect && inRect(img) && ui.tool !== 'rect' || (hasRect && inRect(img) && ui.tool === 'select')) {
+    if (hasRect && inRect(img)) {
       drag = { kind: 'body', startRect: { ...doc.rect }, startImg: img };
       return;
     }
     if (ui.tool === 'rect') {
-      // Empty click in rect tool → start marquee.
       drag = { kind: 'marquee', startImg: img };
       doc.rect = { x: img.x, y: img.y, w: 0, h: 0 };
-      return;
-    }
-    if (hasRect && inRect(img)) {
-      drag = { kind: 'body', startRect: { ...doc.rect }, startImg: img };
     }
   }
 
   function onPointerMove(e: PointerEvent) {
-    if (!drag) return;
+    if (!drag) {
+      updateCursor(e);
+      return;
+    }
     const img = eventToImage(e);
     if (!img) return;
     dragMods = { shift: e.shiftKey, alt: e.altKey };
@@ -268,10 +295,12 @@
   <div
     class="viewport"
     bind:this={viewport}
+    style:cursor={cursor}
     onpointerdown={onPointerDown}
     onpointermove={onPointerMove}
     onpointerup={onPointerUp}
     onpointercancel={onPointerUp}
+    onpointerleave={() => { if (!drag) cursor = 'default'; }}
   >
     {#if doc.image}
       <canvas
@@ -353,7 +382,8 @@
     overflow: hidden;
     box-shadow: 0 8px 24px rgba(0,0,0,0.35);
     touch-action: none;
-    cursor: crosshair;
+    /* cursor is set dynamically via style:cursor in the markup — depends
+       on whether the pointer is over a handle, the rect body, or empty. */
   }
   .stage:not(.has-image) .viewport { box-shadow: none; }
   .layer { position: absolute; display: block; }
