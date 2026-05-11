@@ -69,7 +69,6 @@
     </div>
     <div class="head" style="left: {progressPct}"></div>
   </div>
-  <span class="chip mono"><Icon name="swap" size={12} />{playback.speed}×</span>
   <span class="chip mono"><Icon name="loop" size={12} />{playback.direction === 'in' ? 'In' : 'Out'}</span>
 </div>
 

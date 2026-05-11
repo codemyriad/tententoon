@@ -10,8 +10,6 @@
     '1:1': '1:1',
     '16:9': '16:9'
   };
-  const speeds: Array<0.5 | 1 | 2 | 4> = [0.5, 1, 2, 4];
-
   function setAspect(a: AspectKind) {
     doc.aspect = a;
     if (a === 'match-image' && doc.image) {
@@ -23,9 +21,6 @@
     }
   }
 
-  function setSpeed(s: 0.5 | 1 | 2 | 4) {
-    playback.speed = s;
-  }
   function setDirection(d: Direction) {
     playback.direction = d;
   }
@@ -88,15 +83,6 @@
     {#if !hasRect}
       <p class="empty">Available once a rectangle is set.</p>
     {/if}
-    <div class="seg-wrap">
-      <span class="label">Speed</span>
-      <div class="segmented" role="radiogroup">
-        {#each speeds as s}
-          <button class="seg" class:active={playback.speed === s} disabled={!hasRect} onclick={() => setSpeed(s)}
-            >{s}×</button>
-        {/each}
-      </div>
-    </div>
     <div class="seg-wrap">
       <span class="label">Direction</span>
       <div class="segmented" role="radiogroup">
