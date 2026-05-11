@@ -146,7 +146,7 @@
 </script>
 
 <Panel>
-  {#snippet title()}Escher: (z − c)<sup>α</sup>{/snippet}
+  {#snippet title()}Tententoon{/snippet}
   {#snippet chips()}
     {#if pipeline.geom && pipeline.R0}
       {@const k = pipeline.geom.logS / (2 * Math.PI)}

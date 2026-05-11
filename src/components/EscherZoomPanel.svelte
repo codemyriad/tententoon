@@ -138,7 +138,7 @@
 </script>
 
 <Panel>
-  {#snippet title()}Escher zoom — (z − c)<sup>α</sup>, animated{/snippet}
+  {#snippet title()}Tententoon, animated{/snippet}
   {#snippet chips()}
     {#if pipeline.geom}
       {@const k = pipeline.geom.logS / (2 * Math.PI)}

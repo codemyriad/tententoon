@@ -9,8 +9,8 @@
   import { imageState, loadImageFromUrl, restoreLastSession } from './lib/stores/image.svelte';
   import { identityOf, readSelection, type StoredSelection } from './lib/persistence';
 
-  const EXAMPLE_URL = '/Droste_1260359-nevit.jpg';
-  const LOCAL_URL = '/droste-image.jpg';
+  const EXAMPLE_URL = `${import.meta.env.BASE_URL}Droste_1260359-nevit.jpg`;
+  const LOCAL_URL = `${import.meta.env.BASE_URL}droste-image.jpg`;
 
   // Default starting selection for the example image (1280×960). The nest is
   // shifted slightly off image-aspect, the crop is the matching minimum
@@ -37,6 +37,18 @@
   // re-fire mid-load and relaunch the loader. A plain `let` is non-reactive,
   // so it doesn't add to the effect's dep set and can't trigger re-runs.
   let bootstrapped = false;
+
+  // Hash-gated parked page. `#internals` shows the log-domain panels
+  // (LogPanel + RotatedLogPanel) which were retired from the main view but
+  // kept around for reuse — resurrection is one URL change away.
+  let hash = $state(typeof window !== 'undefined' ? window.location.hash : '');
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const update = () => (hash = window.location.hash);
+    window.addEventListener('hashchange', update);
+    return () => window.removeEventListener('hashchange', update);
+  });
+  const showInternals = $derived(hash === '#internals');
 
   $effect(() => {
     if (bootstrapped || imageState.source) return;
@@ -66,31 +78,50 @@
     </p>
   </header>
 
-  <div class="row"><Uploader /></div>
+  {#if showInternals}
+    <p class="muted nav">
+      <button
+        type="button"
+        class="link"
+        onclick={() => {
+          history.pushState(null, '', window.location.pathname + window.location.search);
+          hash = '';
+        }}
+      >← Back to main view</button>
+    </p>
 
-  <div class="row">
-    <SourcePanel />
-  </div>
+    <div class="row">
+      <SourcePanel />
+    </div>
 
-  <div class="row">
-    <LogPanel />
-  </div>
+    <div class="row">
+      <LogPanel />
+    </div>
 
-  <div class="row">
-    <RotatedLogPanel />
-  </div>
+    <div class="row">
+      <RotatedLogPanel />
+    </div>
+  {:else}
+    <div class="row"><Uploader /></div>
 
-  <div class="row">
-    <EscherPanel />
-  </div>
+    <div class="row">
+      <SourcePanel />
+    </div>
 
-  <div class="row">
-    <EscherZoomPanel />
-  </div>
+    <div class="row">
+      <EscherPanel />
+    </div>
 
-  <div class="row">
-    <ZoomPreview />
-  </div>
+    <div class="row">
+      <ZoomPreview />
+    </div>
+
+    <div class="row">
+      <EscherZoomPanel />
+    </div>
+
+    <p class="muted nav"><a href="#internals">Internals: log-domain panels →</a></p>
+  {/if}
 
   {#if usingExample}
     <footer class="credit muted">
@@ -141,4 +172,25 @@
     text-decoration-color: var(--border);
   }
   .credit a:hover { color: var(--teal); }
+  .nav {
+    font-size: 0.85rem;
+    margin: 0;
+  }
+  .nav a {
+    color: var(--muted);
+    text-decoration: underline;
+    text-decoration-color: var(--border);
+  }
+  .nav a:hover { color: var(--teal); }
+  .nav .link {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: var(--muted);
+    text-decoration: underline;
+    text-decoration-color: var(--border);
+    cursor: pointer;
+  }
+  .nav .link:hover { color: var(--teal); }
 </style>

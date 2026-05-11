@@ -70,6 +70,11 @@ export function initSelection(
   selectionState.aspectLocked = aspectLocked;
   selectionState.crop = crop;
   selectionState.nest = nest;
+  // Persist the initial selection too. Otherwise a preset-driven default
+  // (e.g. EXAMPLE_DEFAULT) is only in memory: navigating away and back
+  // calls restoreLastSession → readSelection → null → initSelection runs
+  // the generic centred-default branch instead of the preset.
+  persist();
 }
 
 /**

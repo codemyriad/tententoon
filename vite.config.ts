@@ -89,6 +89,9 @@ function falUpscaleProxy(): Plugin {
 }
 
 export default defineConfig({
+  // Relative base so the built site works at any path on the host
+  // (root, subdirectory, or static-file hosts like GitHub Pages).
+  base: './',
   plugins: [svelte(), falUpscaleProxy()],
   server: { host: '127.0.0.1', port: 5173, strictPort: true }
 });
