@@ -1,0 +1,53 @@
+/* Tokens for /ui1. Scoped under .ui1-root so the host page's variables
+   aren't disturbed. Theme classes go on the .ui1-root element (or a
+   descendant); only one is active at a time. Token values are lifted
+   verbatim from assets/hifi/index.html — same palette as the mock. */
+
+.ui1-root {
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+}
+
+.ui1-root.theme-light-neutral {
+  --bg: #fafaf7;
+  --panel: #ffffff;
+  --panel-2: #f4f2ec;
+  --border: #e6e3dc;
+  --border-strong: #d3cec3;
+  --ink: #1a1814;
+  --ink-2: #4a463f;
+  --muted: #8a857a;
+  --accent: #d94f2c;
+  --accent-soft: rgba(217, 79, 44, 0.10);
+  --canvas-bg: #2a261f;
+  --shadow: 0 1px 0 rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+.ui1-root.theme-light-warm {
+  --bg: #f3ece0;
+  --panel: #fbf6ec;
+  --panel-2: #ede4d2;
+  --border: #d9cfba;
+  --border-strong: #c4b89e;
+  --ink: #2b241a;
+  --ink-2: #574836;
+  --muted: #8a7d68;
+  --accent: #d94f2c;
+  --accent-soft: rgba(217, 79, 44, 0.12);
+  --canvas-bg: #2b241a;
+  --shadow: 0 1px 0 rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.ui1-root.theme-dark-warm {
+  --bg: #1a1611;
+  --panel: #221d16;
+  --panel-2: #2a241c;
+  --border: #3a322a;
+  --border-strong: #4d4338;
+  --ink: #f3ece0;
+  --ink-2: #cbbfa9;
+  --muted: #8a7d68;
+  --accent: #ee6a47;
+  --accent-soft: rgba(238, 106, 71, 0.16);
+  --canvas-bg: #0e0c09;
+  --shadow: 0 1px 0 rgba(0, 0, 0, 0.6), 0 12px 32px rgba(0, 0, 0, 0.4);
+}

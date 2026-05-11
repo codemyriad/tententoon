@@ -1,0 +1,481 @@
+<script lang="ts">
+  /**
+   * Canvas stage for /ui1. Three stacked layers inside a single fit-to-
+   * container viewport:
+   *
+   *   1. <imageCanvas>   2D-context. Always shows the loaded source image.
+   *   2. <drosteCanvas>  Transparent until a rect is drawn; then the
+   *                      tier-aware GPU spiral renderer fills it.
+   *   3. <svg>           Dim mask + rect outline + 8 handles + thirds grid +
+   *                      dimension badge. Pure visual; the container owns
+   *                      pointer events.
+   *
+   * Pointer behaviour by tool:
+   *   ui.tool === 'rect'   — marquee-drag on empty creates a rect; drag
+   *                          inside the rect moves it; drag on a handle
+   *                          resizes. Shift locks aspect to the active
+   *                          chip; Alt resizes from centre.
+   *   ui.tool === 'select' — drag the rect body / handles only.
+   *   ui.tool === 'pan'    — drag scrolls the viewport (TODO: out of scope
+   *                          for the placeholder; falls back to no-op).
+   */
+
+  import { onMount } from 'svelte';
+  import {
+    doc,
+    playback,
+    ui,
+    chipAspect,
+    type Rect
+  } from '../../lib/ui1/state.svelte';
+  import { createEscherZoomRenderer } from '../../lib/render/escher-zoom';
+  import { buildRenderInputs, extractPixels, snapRectToAspect, phase, effectiveT } from '../../lib/ui1/render';
+
+  type Props = {
+    /** Outbound: lets the parent reach the live preview canvas for export. */
+    bindCanvas?: (canvas: HTMLCanvasElement | null) => void;
+    /** Outbound: a render-one-frame fn for the parent's GIF export. */
+    bindRenderFrame?: (fn: (off: HTMLCanvasElement, frame: number, total: number) => Promise<void>) => void;
+  };
+  let { bindCanvas, bindRenderFrame }: Props = $props();
+
+  let viewport: HTMLDivElement | null = $state(null);
+  let imageCanvas: HTMLCanvasElement | null = $state(null);
+  let drosteCanvas: HTMLCanvasElement | null = $state(null);
+
+  let pixels: ImageData | null = null;
+  let renderer: ReturnType<typeof createEscherZoomRenderer> | null = null;
+  let viewW = $state(0);
+  let viewH = $state(0);
+
+  /** Image area inside the viewport, in CSS px. Letterboxed to image aspect. */
+  const fit = $derived.by(() => {
+    if (!doc.image || viewW <= 0 || viewH <= 0) return null;
+    const ia = doc.image.width / doc.image.height;
+    const va = viewW / viewH;
+    let w: number, h: number;
+    if (va > ia) { h = viewH; w = h * ia; } else { w = viewW; h = w / ia; }
+    return {
+      w,
+      h,
+      offX: (viewW - w) / 2,
+      offY: (viewH - h) / 2,
+      scaleCss: w / doc.image.width
+    };
+  });
+
+  const hasRect = $derived(doc.rect.w > 0 && doc.rect.h > 0);
+  const ready = $derived(phase() !== 'empty');
+
+  // 1. Track viewport size.
+  $effect(() => {
+    if (!viewport) return;
+    const update = () => {
+      const r = viewport!.getBoundingClientRect();
+      viewW = r.width;
+      viewH = r.height;
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(viewport);
+    return () => ro.disconnect();
+  });
+
+  // 2. Pixels cache.
+  $effect(() => {
+    if (!doc.image) { pixels = null; return; }
+    pixels = extractPixels(doc.image);
+  });
+
+  // 3. Set up renderer on mount.
+  onMount(() => {
+    if (!drosteCanvas) return;
+    const r = createEscherZoomRenderer();
+    renderer = r;
+    void r.init(drosteCanvas);
+    bindCanvas?.(drosteCanvas);
+    bindRenderFrame?.(renderFrameToOffscreen);
+    return () => {
+      r.dispose();
+      renderer = null;
+      bindCanvas?.(null);
+    };
+  });
+
+  // 4. Image-canvas: drawImage when image / size changes.
+  $effect(() => {
+    if (!imageCanvas || !doc.image || !fit) return;
+    const dpr = window.devicePixelRatio || 1;
+    imageCanvas.width = Math.max(1, Math.round(fit.w * dpr));
+    imageCanvas.height = Math.max(1, Math.round(fit.h * dpr));
+    const ctx = imageCanvas.getContext('2d');
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(doc.image, 0, 0, fit.w, fit.h);
+  });
+
+  // 5. Live render the droste canvas. The renderer holds drosteCanvas
+  //    via transferControlToOffscreen — we never resize it via getContext.
+  $effect(() => {
+    if (!renderer || !drosteCanvas || !doc.image || !pixels || !fit || !hasRect) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(1, Math.round(fit.w * dpr));
+    const h = Math.max(1, Math.round(fit.h * dpr));
+    void playback.t; // track t for animation
+    void ui.zoom;    // (placeholder; zoom currently feeds into nothing)
+    const inputs = buildRenderInputs(doc.image, pixels, doc.rect, w, h);
+    if (!inputs) return;
+    renderer.render(inputs);
+  });
+
+  // 6. Animation clock — same pattern as EscherZoomPanel. Skipped when
+  //    not playing; we don't need to halt on drag here because /ui1's
+  //    drag tools don't fight the main thread the same way the legacy
+  //    panels did.
+  const MAX_DT = 1 / 30;
+  $effect(() => {
+    if (!playback.playing) return;
+    let raf = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = Math.min((now - last) / 1000, MAX_DT);
+      last = now;
+      playback.t = (playback.t + (dt * playback.speed) / playback.loopLength) % 1;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  });
+
+  /** Render one specific frame to an off-screen canvas. Used by GIF export. */
+  async function renderFrameToOffscreen(off: HTMLCanvasElement, frame: number, total: number): Promise<void> {
+    if (!doc.image || !pixels) return;
+    // Use the CPU renderer so we don't transfer the off-screen canvas — it
+    // can be reused across frames. Each call recreates the renderer; cheap
+    // enough at GIF rates (~18 fps × 10 s = 180 frames).
+    const r = createEscherZoomRenderer({ forceTier: 'cpu-main' });
+    await r.init(off);
+    try {
+      const u = buildRenderInputs(doc.image, pixels, doc.rect, off.width, off.height);
+      if (!u) return;
+      const tRaw = frame / total;
+      const t = playback.direction === 'in' ? tRaw : 1 - tRaw;
+      r.render({ ...u, t });
+    } finally {
+      r.dispose();
+    }
+  }
+
+  // ---- pointer interaction ----
+
+  type DragKind =
+    | { kind: 'marquee'; startImg: { x: number; y: number } }
+    | { kind: 'body'; startRect: Rect; startImg: { x: number; y: number } }
+    | { kind: 'handle'; opposite: { x: number; y: number }; signX: -1 | 1; signY: -1 | 1; centerStart: { x: number; y: number } | null };
+  let drag: DragKind | null = null;
+  let dragMods = $state({ shift: false, alt: false });
+
+  /** Convert a pointer event into image-pixel coordinates. */
+  function eventToImage(e: PointerEvent): { x: number; y: number } | null {
+    if (!viewport || !doc.image || !fit) return null;
+    const r = viewport.getBoundingClientRect();
+    const cssX = e.clientX - r.left;
+    const cssY = e.clientY - r.top;
+    return {
+      x: (cssX - fit.offX) / fit.scaleCss,
+      y: (cssY - fit.offY) / fit.scaleCss
+    };
+  }
+
+  /** Image-space → CSS-px helper for the SVG overlay. */
+  function imgToCss(x: number, y: number): { x: number; y: number } {
+    if (!fit) return { x: 0, y: 0 };
+    return { x: fit.offX + x * fit.scaleCss, y: fit.offY + y * fit.scaleCss };
+  }
+
+  const handles: Array<{ corner: [number, number]; name: string }> = [
+    { corner: [0, 0], name: 'nw' },
+    { corner: [0.5, 0], name: 'n' },
+    { corner: [1, 0], name: 'ne' },
+    { corner: [1, 0.5], name: 'e' },
+    { corner: [1, 1], name: 'se' },
+    { corner: [0.5, 1], name: 's' },
+    { corner: [0, 1], name: 'sw' },
+    { corner: [0, 0.5], name: 'w' }
+  ];
+
+  /** Pick which handle (if any) is under a pointer position in CSS px, within ~10 CSS px tolerance. */
+  function hitHandle(cssX: number, cssY: number): string | null {
+    if (!hasRect || !fit) return null;
+    const tol = 10;
+    for (const h of handles) {
+      const cx = doc.rect.x + doc.rect.w * h.corner[0];
+      const cy = doc.rect.y + doc.rect.h * h.corner[1];
+      const p = imgToCss(cx, cy);
+      const dx = p.x - cssX;
+      const dy = p.y - cssY;
+      if (dx * dx + dy * dy <= tol * tol) return h.name;
+    }
+    return null;
+  }
+
+  function inRect(img: { x: number; y: number }): boolean {
+    return img.x >= doc.rect.x && img.x <= doc.rect.x + doc.rect.w
+      && img.y >= doc.rect.y && img.y <= doc.rect.y + doc.rect.h;
+  }
+
+  function clampImg(p: { x: number; y: number }): { x: number; y: number } {
+    if (!doc.image) return p;
+    return {
+      x: Math.max(0, Math.min(doc.image.width, p.x)),
+      y: Math.max(0, Math.min(doc.image.height, p.y))
+    };
+  }
+
+  function applyMods(rect: Rect, e: PointerEvent): Rect {
+    if (e.shiftKey) {
+      const a = chipAspect();
+      if (a) return snapRectToAspect(rect, a);
+    }
+    return rect;
+  }
+
+  function onPointerDown(e: PointerEvent) {
+    if (!ready) return;
+    const img = eventToImage(e);
+    if (!img) return;
+    const cssRect = viewport!.getBoundingClientRect();
+    const cssX = e.clientX - cssRect.left;
+    const cssY = e.clientY - cssRect.top;
+    dragMods = { shift: e.shiftKey, alt: e.altKey };
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+
+    const handle = hitHandle(cssX, cssY);
+    if (handle) {
+      const r = doc.rect;
+      const oppX = handle.includes('w') ? r.x + r.w : (handle.includes('e') ? r.x : r.x + r.w / 2);
+      const oppY = handle.includes('n') ? r.y + r.h : (handle.includes('s') ? r.y : r.y + r.h / 2);
+      const signX: -1 | 1 = handle.includes('e') ? 1 : -1;
+      const signY: -1 | 1 = handle.includes('s') ? 1 : -1;
+      const centerStart = e.altKey ? { x: r.x + r.w / 2, y: r.y + r.h / 2 } : null;
+      drag = { kind: 'handle', opposite: { x: oppX, y: oppY }, signX, signY, centerStart };
+      return;
+    }
+    if (hasRect && inRect(img) && ui.tool !== 'rect' || (hasRect && inRect(img) && ui.tool === 'select')) {
+      drag = { kind: 'body', startRect: { ...doc.rect }, startImg: img };
+      return;
+    }
+    if (ui.tool === 'rect') {
+      // Empty click in rect tool → start marquee.
+      drag = { kind: 'marquee', startImg: img };
+      doc.rect = { x: img.x, y: img.y, w: 0, h: 0 };
+      return;
+    }
+    if (hasRect && inRect(img)) {
+      drag = { kind: 'body', startRect: { ...doc.rect }, startImg: img };
+    }
+  }
+
+  function onPointerMove(e: PointerEvent) {
+    if (!drag) return;
+    const img = eventToImage(e);
+    if (!img) return;
+    dragMods = { shift: e.shiftKey, alt: e.altKey };
+
+    if (drag.kind === 'marquee') {
+      const a = { x: Math.min(drag.startImg.x, img.x), y: Math.min(drag.startImg.y, img.y) };
+      const b = { x: Math.max(drag.startImg.x, img.x), y: Math.max(drag.startImg.y, img.y) };
+      let next: Rect = { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
+      next = applyMods(next, e);
+      doc.rect = next;
+      return;
+    }
+    if (drag.kind === 'body') {
+      const dx = img.x - drag.startImg.x;
+      const dy = img.y - drag.startImg.y;
+      doc.rect = {
+        x: drag.startRect.x + dx,
+        y: drag.startRect.y + dy,
+        w: drag.startRect.w,
+        h: drag.startRect.h
+      };
+      return;
+    }
+    if (drag.kind === 'handle') {
+      let nx: number, ny: number, nw: number, nh: number;
+      if (drag.centerStart) {
+        // Alt: resize from centre.
+        const dx = Math.abs(img.x - drag.centerStart.x);
+        const dy = Math.abs(img.y - drag.centerStart.y);
+        nw = dx * 2;
+        nh = dy * 2;
+        nx = drag.centerStart.x - nw / 2;
+        ny = drag.centerStart.y - nh / 2;
+      } else {
+        nw = Math.abs(img.x - drag.opposite.x);
+        nh = Math.abs(img.y - drag.opposite.y);
+        nx = drag.signX === 1 ? drag.opposite.x : drag.opposite.x - nw;
+        ny = drag.signY === 1 ? drag.opposite.y : drag.opposite.y - nh;
+      }
+      let next: Rect = { x: nx, y: ny, w: nw, h: nh };
+      next = applyMods(next, e);
+      doc.rect = next;
+    }
+  }
+
+  function onPointerUp(e: PointerEvent) {
+    if (!drag) return;
+    drag = null;
+    try { (e.currentTarget as Element).releasePointerCapture(e.pointerId); } catch {}
+    // Normalise: clamp to image and ensure min size.
+    if (doc.image) {
+      const minSide = 8;
+      let r = doc.rect;
+      r = { x: Math.max(0, r.x), y: Math.max(0, r.y), w: Math.min(doc.image.width - Math.max(0, r.x), r.w), h: Math.min(doc.image.height - Math.max(0, r.y), r.h) };
+      if (r.w < minSide || r.h < minSide) {
+        r = { x: 0, y: 0, w: 0, h: 0 };
+      }
+      doc.rect = r;
+    }
+  }
+
+  // ---- visual derived data for the overlay ----
+
+  const overlayRect = $derived.by(() => {
+    if (!hasRect || !fit) return null;
+    const tl = imgToCss(doc.rect.x, doc.rect.y);
+    return { x: tl.x, y: tl.y, w: doc.rect.w * fit.scaleCss, h: doc.rect.h * fit.scaleCss };
+  });
+</script>
+
+<section class="stage" class:has-image={!!doc.image}>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="viewport"
+    bind:this={viewport}
+    onpointerdown={onPointerDown}
+    onpointermove={onPointerMove}
+    onpointerup={onPointerUp}
+    onpointercancel={onPointerUp}
+  >
+    {#if doc.image && fit}
+      <canvas
+        bind:this={imageCanvas}
+        class="layer image"
+        style:left="{fit.offX}px"
+        style:top="{fit.offY}px"
+        style:width="{fit.w}px"
+        style:height="{fit.h}px"
+      ></canvas>
+      <canvas
+        bind:this={drosteCanvas}
+        class="layer droste"
+        class:visible={hasRect}
+        style:left="{fit.offX}px"
+        style:top="{fit.offY}px"
+        style:width="{fit.w}px"
+        style:height="{fit.h}px"
+      ></canvas>
+      {#if overlayRect}
+        <svg class="overlay" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <mask id="ui1-mask">
+              <rect width="100%" height="100%" fill="white" />
+              <rect
+                x={overlayRect.x}
+                y={overlayRect.y}
+                width={overlayRect.w}
+                height={overlayRect.h}
+                fill="black"
+              />
+            </mask>
+          </defs>
+          <rect width="100%" height="100%" fill="rgba(0,0,0,0.32)" mask="url(#ui1-mask)" />
+          <rect
+            x={overlayRect.x + 0.5}
+            y={overlayRect.y + 0.5}
+            width={overlayRect.w - 1}
+            height={overlayRect.h - 1}
+            fill="none"
+            stroke="var(--accent)"
+            stroke-width="1.5"
+          />
+          <!-- thirds grid -->
+          <g opacity="0.5" stroke="white" stroke-width="1" stroke-dasharray="4 4">
+            <line x1={overlayRect.x + overlayRect.w / 3} y1={overlayRect.y} x2={overlayRect.x + overlayRect.w / 3} y2={overlayRect.y + overlayRect.h} />
+            <line x1={overlayRect.x + (2 * overlayRect.w) / 3} y1={overlayRect.y} x2={overlayRect.x + (2 * overlayRect.w) / 3} y2={overlayRect.y + overlayRect.h} />
+            <line x1={overlayRect.x} y1={overlayRect.y + overlayRect.h / 3} x2={overlayRect.x + overlayRect.w} y2={overlayRect.y + overlayRect.h / 3} />
+            <line x1={overlayRect.x} y1={overlayRect.y + (2 * overlayRect.h) / 3} x2={overlayRect.x + overlayRect.w} y2={overlayRect.y + (2 * overlayRect.h) / 3} />
+          </g>
+          <!-- 8 handles -->
+          {#each handles as h}
+            {@const cx = overlayRect.x + overlayRect.w * h.corner[0]}
+            {@const cy = overlayRect.y + overlayRect.h * h.corner[1]}
+            <rect x={cx - 4.5} y={cy - 4.5} width="9" height="9" fill="white" stroke="var(--accent)" stroke-width="1.5" rx="2" />
+          {/each}
+        </svg>
+        <!-- dimension badge -->
+        <span
+          class="badge mono"
+          style:left="{overlayRect.x}px"
+          style:top="{overlayRect.y + overlayRect.h + 6}px"
+        >{Math.round(doc.rect.w)} × {Math.round(doc.rect.h)}</span>
+      {/if}
+      <!-- HUD: zoom-fit chip + coords -->
+      <div class="hud-tl mono">Fit · {Math.round((fit.scaleCss) * 100)}%</div>
+      {#if hasRect}
+        <div class="hud-br mono">{Math.round(doc.rect.x)}, {Math.round(doc.rect.y)} · {Math.round(doc.rect.w)}×{Math.round(doc.rect.h)}</div>
+      {/if}
+    {/if}
+  </div>
+</section>
+
+<style>
+  .stage {
+    flex: 1;
+    background: var(--canvas-bg);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+  }
+  .viewport {
+    position: absolute;
+    inset: 24px 24px;
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    touch-action: none;
+    cursor: crosshair;
+  }
+  .stage:not(.has-image) .viewport { box-shadow: none; }
+  .layer { position: absolute; display: block; }
+  .layer.droste { opacity: 0; pointer-events: none; }
+  .layer.droste.visible { opacity: 1; }
+  .overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .badge {
+    position: absolute;
+    background: var(--accent);
+    color: #fff;
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+  }
+  .hud-tl, .hud-br {
+    position: absolute;
+    background: rgba(0,0,0,0.5);
+    color: rgba(255,255,255,0.85);
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    pointer-events: none;
+  }
+  .hud-tl { top: 8px; left: 12px; }
+  .hud-br { bottom: 8px; right: 12px; }
+  .mono { font-family: var(--font-mono); }
+</style>

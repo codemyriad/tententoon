@@ -6,6 +6,7 @@
   import EscherPanel from './components/EscherPanel.svelte';
   import EscherZoomPanel from './components/EscherZoomPanel.svelte';
   import ZoomPreview from './components/ZoomPreview.svelte';
+  import UiVariant1 from './components/UiVariant1.svelte';
   import { imageState, loadImageFromUrl, restoreLastSession } from './lib/stores/image.svelte';
   import { identityOf, readSelection, writeSelection, type StoredSelection } from './lib/persistence';
 
@@ -38,17 +39,40 @@
   // so it doesn't add to the effect's dep set and can't trigger re-runs.
   let bootstrapped = false;
 
-  // Hash-gated parked page. `#internals` shows the log-domain panels
-  // (LogPanel + RotatedLogPanel) which were retired from the main view but
-  // kept around for reuse — resurrection is one URL change away.
+  // Routing.
+  //   Pathname `/ui1`, `/ui2`, … select UI-variant pages. New variants
+  //     drop in by adding a component import and a case in the route switch
+  //     below — no router library, no per-page state plumbing (variants
+  //     read the same shared stores as the main view).
+  //   Hash `#internals` is the legacy parked-panels page (LogPanel +
+  //     RotatedLogPanel). Kept around as a hash route both because it
+  //     pre-dates the path scheme and because hash routes work without
+  //     SPA-fallback configuration on static hosts.
+  //   Pathname matching strips BASE_URL so the same code works at root or
+  //     in a subdirectory deploy. `popstate` covers Back/Forward; in-app
+  //     navigation can use either <a href> (full reload) or pushState +
+  //     a manual `pathname = …` update if it grows in.
+  let pathname = $state(typeof window !== 'undefined' ? window.location.pathname : '/');
   let hash = $state(typeof window !== 'undefined' ? window.location.hash : '');
   $effect(() => {
     if (typeof window === 'undefined') return;
-    const update = () => (hash = window.location.hash);
-    window.addEventListener('hashchange', update);
-    return () => window.removeEventListener('hashchange', update);
+    const onHash = () => (hash = window.location.hash);
+    const onPop = () => (pathname = window.location.pathname);
+    window.addEventListener('hashchange', onHash);
+    window.addEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('hashchange', onHash);
+      window.removeEventListener('popstate', onPop);
+    };
+  });
+  const route = $derived.by(() => {
+    const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+    let p = pathname;
+    if (base && p.startsWith(base)) p = p.slice(base.length);
+    return p || '/';
   });
   const showInternals = $derived(hash === '#internals');
+  const showUi1 = $derived(route === '/ui1');
 
   $effect(() => {
     if (bootstrapped || imageState.source) return;
@@ -75,6 +99,16 @@
   });
 </script>
 
+{#if showUi1}
+  <!--
+    /ui1 owns the full viewport — top bar / tool rail / canvas / inspector /
+    timeline — so we skip the <main> chrome the legacy view uses. The "back"
+    link sits absolutely-positioned over the top bar so the chrome stays
+    flush.
+  -->
+  <a class="ui-back-link" href={import.meta.env.BASE_URL}>← Back to main view</a>
+  <UiVariant1 />
+{:else}
 <main>
   <header class="page-head">
     <h1>Tententoon generator</h1>
@@ -125,7 +159,11 @@
       <EscherZoomPanel />
     </div>
 
-    <p class="muted nav"><a href="#internals">Internals: log-domain panels →</a></p>
+    <p class="muted nav">
+      <a href={`${import.meta.env.BASE_URL}ui1`}>UI variant 1 →</a>
+      ·
+      <a href="#internals">Internals: log-domain panels →</a>
+    </p>
   {/if}
 
   {#if usingExample}
@@ -143,6 +181,7 @@
     </footer>
   {/if}
 </main>
+{/if}
 
 <style>
   main {
@@ -187,6 +226,21 @@
     text-decoration-color: var(--border);
   }
   .nav a:hover { color: var(--teal); }
+  .ui-back-link {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    z-index: 1000;
+    font-size: 11px;
+    color: rgba(0, 0, 0, 0.55);
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(4px);
+    padding: 4px 8px;
+    border-radius: 6px;
+    text-decoration: none;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+  }
+  .ui-back-link:hover { background: rgba(255, 255, 255, 0.95); }
   .nav .link {
     background: none;
     border: none;
