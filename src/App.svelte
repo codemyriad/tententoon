@@ -72,7 +72,7 @@
 
 <main>
   <header class="page-head">
-    <h1>Droste Explorable</h1>
+    <h1>Tententoon generator</h1>
     <p class="muted sub">
       Place a self-similar nest inside an image. Watch the limit point emerge.
     </p>
