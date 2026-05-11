@@ -1,14 +1,16 @@
 <script lang="ts">
   /**
-   * Canvas stage for /ui1. Three stacked layers inside a single fit-to-
-   * container viewport:
+   * Editing stage for /ui1: image + rect overlay. Two layers inside a
+   * fit-to-container viewport:
    *
-   *   1. <imageCanvas>   2D-context. Always shows the loaded source image.
-   *   2. <drosteCanvas>  Transparent until a rect is drawn; then the
-   *                      tier-aware GPU spiral renderer fills it.
-   *   3. <svg>           Dim mask + rect outline + 8 handles + thirds grid +
-   *                      dimension badge. Pure visual; the container owns
-   *                      pointer events.
+   *   1. <imageCanvas>  2D-context. Shows the loaded source image.
+   *   2. <svg>          Dim mask + rect outline + 8 handles + thirds grid +
+   *                     dimension badge. Pure visual; the container owns
+   *                     pointer events.
+   *
+   * The spiral output lives in PreviewStage (a separate pane). That way
+   * dragging the rect doesn't repaint the same area the user is trying to
+   * grab — you see the live result side by side instead.
    *
    * Pointer behaviour by tool:
    *   ui.tool === 'rect'   — marquee-drag on empty creates a rect; drag
@@ -16,37 +18,19 @@
    *                          resizes. Shift locks aspect to the active
    *                          chip; Alt resizes from centre.
    *   ui.tool === 'select' — drag the rect body / handles only.
-   *   ui.tool === 'pan'    — drag scrolls the viewport (TODO: out of scope
-   *                          for the placeholder; falls back to no-op).
+   *   ui.tool === 'pan'    — drag scrolls the viewport (TODO; no-op).
    */
 
   import {
     doc,
-    playback,
     ui,
     chipAspect,
     type Rect
   } from '../../lib/ui1/state.svelte';
-  import { createEscherZoomRenderer } from '../../lib/render/escher-zoom';
-  import { buildRenderInputs, extractPixels, snapRectToAspect, phase, effectiveT } from '../../lib/ui1/render';
-
-  type Props = {
-    /** Outbound: lets the parent reach the live preview canvas for export. */
-    bindCanvas?: (canvas: HTMLCanvasElement | null) => void;
-    /** Outbound: a render-one-frame fn for the parent's GIF export. */
-    bindRenderFrame?: (fn: (off: HTMLCanvasElement, frame: number, total: number) => Promise<void>) => void;
-  };
-  let { bindCanvas, bindRenderFrame }: Props = $props();
+  import { snapRectToAspect, phase } from '../../lib/ui1/render';
 
   let viewport: HTMLDivElement | null = $state(null);
   let imageCanvas: HTMLCanvasElement | null = $state(null);
-  let drosteCanvas: HTMLCanvasElement | null = $state(null);
-
-  // pixels MUST be reactive so the render effect re-fires when a new image
-  // is decoded — otherwise the render reads stale pixels until the next
-  // unrelated state change.
-  let pixels: ImageData | null = $state(null);
-  let renderer: ReturnType<typeof createEscherZoomRenderer> | null = $state(null);
   let viewW = $state(0);
   let viewH = $state(0);
 
@@ -83,35 +67,7 @@
     return () => ro.disconnect();
   });
 
-  // 2. Pixels cache.
-  $effect(() => {
-    if (!doc.image) { pixels = null; return; }
-    pixels = extractPixels(doc.image);
-  });
-
-  // 3. Set up the renderer the moment drosteCanvas binds. Use $effect (not
-  //    onMount) because the canvas element is created lazily — only after
-  //    an image is loaded — so it may not exist at component-mount time.
-  //    The cleanup releases the renderer if the canvas is ever unmounted.
-  $effect(() => {
-    if (!drosteCanvas) {
-      renderer = null;
-      bindCanvas?.(null);
-      return;
-    }
-    const r = createEscherZoomRenderer();
-    renderer = r;
-    void r.init(drosteCanvas);
-    bindCanvas?.(drosteCanvas);
-    bindRenderFrame?.(renderFrameToOffscreen);
-    return () => {
-      r.dispose();
-      renderer = null;
-      bindCanvas?.(null);
-    };
-  });
-
-  // 4. Image-canvas: drawImage when image / size changes.
+  // 2. Image-canvas: drawImage when image / size changes.
   $effect(() => {
     if (!imageCanvas || !doc.image || !fit) return;
     const dpr = window.devicePixelRatio || 1;
@@ -124,58 +80,6 @@
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(doc.image, 0, 0, fit.w, fit.h);
   });
-
-  // 5. Live render the droste canvas. The renderer holds drosteCanvas
-  //    via transferControlToOffscreen — we never resize it via getContext.
-  $effect(() => {
-    if (!renderer || !drosteCanvas || !doc.image || !pixels || !fit || !hasRect) return;
-    const dpr = window.devicePixelRatio || 1;
-    const w = Math.max(1, Math.round(fit.w * dpr));
-    const h = Math.max(1, Math.round(fit.h * dpr));
-    void playback.t; // track t for animation
-    void ui.zoom;    // (placeholder; zoom currently feeds into nothing)
-    const inputs = buildRenderInputs(doc.image, pixels, doc.rect, w, h);
-    if (!inputs) return;
-    renderer.render(inputs);
-  });
-
-  // 6. Animation clock — same pattern as EscherZoomPanel. Skipped when
-  //    not playing; we don't need to halt on drag here because /ui1's
-  //    drag tools don't fight the main thread the same way the legacy
-  //    panels did.
-  const MAX_DT = 1 / 30;
-  $effect(() => {
-    if (!playback.playing) return;
-    let raf = 0;
-    let last = performance.now();
-    const tick = (now: number) => {
-      const dt = Math.min((now - last) / 1000, MAX_DT);
-      last = now;
-      playback.t = (playback.t + (dt * playback.speed) / playback.loopLength) % 1;
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  });
-
-  /** Render one specific frame to an off-screen canvas. Used by GIF export. */
-  async function renderFrameToOffscreen(off: HTMLCanvasElement, frame: number, total: number): Promise<void> {
-    if (!doc.image || !pixels) return;
-    // Use the CPU renderer so we don't transfer the off-screen canvas — it
-    // can be reused across frames. Each call recreates the renderer; cheap
-    // enough at GIF rates (~18 fps × 10 s = 180 frames).
-    const r = createEscherZoomRenderer({ forceTier: 'cpu-main' });
-    await r.init(off);
-    try {
-      const u = buildRenderInputs(doc.image, pixels, doc.rect, off.width, off.height);
-      if (!u) return;
-      const tRaw = frame / total;
-      const t = playback.direction === 'in' ? tRaw : 1 - tRaw;
-      r.render({ ...u, t });
-    } finally {
-      r.dispose();
-    }
-  }
 
   // ---- pointer interaction ----
 
@@ -370,23 +274,9 @@
     onpointercancel={onPointerUp}
   >
     {#if doc.image}
-      <!-- Canvases mount as soon as the image is loaded; sizing kicks in
-           once the ResizeObserver gives us viewport dimensions. Without
-           this, drosteCanvas would only enter the DOM after `fit` was
-           computed, and the renderer's $effect would never see a canvas
-           to bind to. -->
       <canvas
         bind:this={imageCanvas}
         class="layer image"
-        style:left="{fit?.offX ?? 0}px"
-        style:top="{fit?.offY ?? 0}px"
-        style:width="{fit?.w ?? 0}px"
-        style:height="{fit?.h ?? 0}px"
-      ></canvas>
-      <canvas
-        bind:this={drosteCanvas}
-        class="layer droste"
-        class:visible={hasRect}
         style:left="{fit?.offX ?? 0}px"
         style:top="{fit?.offY ?? 0}px"
         style:width="{fit?.w ?? 0}px"
@@ -467,8 +357,6 @@
   }
   .stage:not(.has-image) .viewport { box-shadow: none; }
   .layer { position: absolute; display: block; }
-  .layer.droste { opacity: 0; pointer-events: none; }
-  .layer.droste.visible { opacity: 1; }
   .overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
   .badge {
     position: absolute;

@@ -17,6 +17,7 @@
   import TopBar from './ui1/TopBar.svelte';
   import ToolRail from './ui1/ToolRail.svelte';
   import CanvasStage from './ui1/CanvasStage.svelte';
+  import PreviewStage from './ui1/PreviewStage.svelte';
   import Inspector from './ui1/Inspector.svelte';
   import Timeline from './ui1/Timeline.svelte';
   import DropZone from './ui1/DropZone.svelte';
@@ -72,10 +73,13 @@
       <section class="empty"><DropZone /></section>
     {:else}
       <div class="canvas-col">
-        <CanvasStage
-          bindCanvas={(c) => (canvas = c)}
-          bindRenderFrame={(fn) => (renderFrame = fn)}
-        />
+        <div class="stages">
+          <CanvasStage />
+          <PreviewStage
+            bindCanvas={(c) => (canvas = c)}
+            bindRenderFrame={(fn) => (renderFrame = fn)}
+          />
+        </div>
         <Timeline />
       </div>
     {/if}
@@ -110,5 +114,10 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
+  }
+  .stages {
+    flex: 1;
+    display: flex;
+    min-height: 0;
   }
 </style>
