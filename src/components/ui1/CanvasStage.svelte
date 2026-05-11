@@ -20,7 +20,6 @@
    *                          for the placeholder; falls back to no-op).
    */
 
-  import { onMount } from 'svelte';
   import {
     doc,
     playback,
@@ -43,8 +42,11 @@
   let imageCanvas: HTMLCanvasElement | null = $state(null);
   let drosteCanvas: HTMLCanvasElement | null = $state(null);
 
-  let pixels: ImageData | null = null;
-  let renderer: ReturnType<typeof createEscherZoomRenderer> | null = null;
+  // pixels MUST be reactive so the render effect re-fires when a new image
+  // is decoded — otherwise the render reads stale pixels until the next
+  // unrelated state change.
+  let pixels: ImageData | null = $state(null);
+  let renderer: ReturnType<typeof createEscherZoomRenderer> | null = $state(null);
   let viewW = $state(0);
   let viewH = $state(0);
 
@@ -87,9 +89,16 @@
     pixels = extractPixels(doc.image);
   });
 
-  // 3. Set up renderer on mount.
-  onMount(() => {
-    if (!drosteCanvas) return;
+  // 3. Set up the renderer the moment drosteCanvas binds. Use $effect (not
+  //    onMount) because the canvas element is created lazily — only after
+  //    an image is loaded — so it may not exist at component-mount time.
+  //    The cleanup releases the renderer if the canvas is ever unmounted.
+  $effect(() => {
+    if (!drosteCanvas) {
+      renderer = null;
+      bindCanvas?.(null);
+      return;
+    }
     const r = createEscherZoomRenderer();
     renderer = r;
     void r.init(drosteCanvas);
@@ -360,23 +369,28 @@
     onpointerup={onPointerUp}
     onpointercancel={onPointerUp}
   >
-    {#if doc.image && fit}
+    {#if doc.image}
+      <!-- Canvases mount as soon as the image is loaded; sizing kicks in
+           once the ResizeObserver gives us viewport dimensions. Without
+           this, drosteCanvas would only enter the DOM after `fit` was
+           computed, and the renderer's $effect would never see a canvas
+           to bind to. -->
       <canvas
         bind:this={imageCanvas}
         class="layer image"
-        style:left="{fit.offX}px"
-        style:top="{fit.offY}px"
-        style:width="{fit.w}px"
-        style:height="{fit.h}px"
+        style:left="{fit?.offX ?? 0}px"
+        style:top="{fit?.offY ?? 0}px"
+        style:width="{fit?.w ?? 0}px"
+        style:height="{fit?.h ?? 0}px"
       ></canvas>
       <canvas
         bind:this={drosteCanvas}
         class="layer droste"
         class:visible={hasRect}
-        style:left="{fit.offX}px"
-        style:top="{fit.offY}px"
-        style:width="{fit.w}px"
-        style:height="{fit.h}px"
+        style:left="{fit?.offX ?? 0}px"
+        style:top="{fit?.offY ?? 0}px"
+        style:width="{fit?.w ?? 0}px"
+        style:height="{fit?.h ?? 0}px"
       ></canvas>
       {#if overlayRect}
         <svg class="overlay" xmlns="http://www.w3.org/2000/svg">
@@ -423,10 +437,12 @@
           style:top="{overlayRect.y + overlayRect.h + 6}px"
         >{Math.round(doc.rect.w)} × {Math.round(doc.rect.h)}</span>
       {/if}
-      <!-- HUD: zoom-fit chip + coords -->
-      <div class="hud-tl mono">Fit · {Math.round((fit.scaleCss) * 100)}%</div>
-      {#if hasRect}
-        <div class="hud-br mono">{Math.round(doc.rect.x)}, {Math.round(doc.rect.y)} · {Math.round(doc.rect.w)}×{Math.round(doc.rect.h)}</div>
+      <!-- HUD: zoom-fit chip + coords (only once we have a fit ratio). -->
+      {#if fit}
+        <div class="hud-tl mono">Fit · {Math.round(fit.scaleCss * 100)}%</div>
+        {#if hasRect}
+          <div class="hud-br mono">{Math.round(doc.rect.x)}, {Math.round(doc.rect.y)} · {Math.round(doc.rect.w)}×{Math.round(doc.rect.h)}</div>
+        {/if}
       {/if}
     {/if}
   </div>

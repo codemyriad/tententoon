@@ -53,7 +53,9 @@ export const playback = $state<{
   loopLength: number;
   exporting: boolean;
 }>({
-  playing: false,
+  // Autoplay by default: the moment a rect is drawn we want the spiral
+  // to be the thing the user sees, not a still frame waiting for input.
+  playing: true,
   t: 0,
   speed: 1,
   direction: 'in',
