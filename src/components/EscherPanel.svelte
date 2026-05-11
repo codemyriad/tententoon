@@ -39,16 +39,25 @@
    */
 
   import { pipeline, STATIC_MAX_W } from '../lib/stores/pipeline.svelte';
+  import { interactionState } from '../lib/stores/interaction.svelte';
   import { sampleDroste, ssOffsetsForFootprint } from '../lib/math/transforms';
   import Panel from './Panel.svelte';
 
   let canvas: HTMLCanvasElement | null = $state(null);
+  // Reusable output buffer — re-created only when (W, H) change. Avoids a
+  // ~940 KB allocation per render at full res.
+  let imageDataCache: { W: number; H: number; data: ImageData } | null = null;
 
-  // Canvas dims follow the WORKING image (= crop), not the original.
+  // Canvas dims follow the WORKING image (= crop), not the original. While
+  // the user is actively dragging a handle we halve the cap to make the
+  // synchronous pixel loop fit in one frame. CSS upscales the smaller
+  // canvas during drag; the effect re-fires on release and re-renders at
+  // full quality. Same idea behind skipping supersampling during drag.
   const dims = $derived.by(() => {
     const ws = pipeline.workingSize;
     if (!ws) return null;
-    const scale = Math.min(1, STATIC_MAX_W / ws.width);
+    const cap = interactionState.active ? STATIC_MAX_W / 2 : STATIC_MAX_W;
+    const scale = Math.min(1, cap / ws.width);
     return {
       W: Math.round(ws.width * scale),
       H: Math.round(ws.height * scale),
@@ -61,6 +70,11 @@
     const droste = pipeline.drosteCtx;
     const d = dims;
     const R0 = pipeline.R0;
+    // Capture interactionState.active at effect-snapshot time. While true,
+    // skip adaptive supersampling — the SS spike near the limit point is
+    // the worst case (up to 16× per pixel). Shimmer-on-motion is fine; the
+    // effect re-fires on release and renders with full SS.
+    const active = interactionState.active;
     if (!pixels || !droste || !d || !R0 || !canvas) return;
     const cv = canvas;
 
@@ -107,7 +121,10 @@
       return { sx, sy, footprint };
     }
 
-    const out = ctx.createImageData(d.W, d.H);
+    if (!imageDataCache || imageDataCache.W !== d.W || imageDataCache.H !== d.H) {
+      imageDataCache = { W: d.W, H: d.H, data: ctx.createImageData(d.W, d.H) };
+    }
+    const out = imageDataCache.data;
     const data = out.data;
     const rgba: [number, number, number, number] = [0, 0, 0, 0];
     for (let py = 0; py < d.H; py++) {
@@ -118,7 +135,7 @@
           data[idx] = 0; data[idx + 1] = 0; data[idx + 2] = 0; data[idx + 3] = 0;
           continue;
         }
-        const offsets = ssOffsetsForFootprint(fwd.footprint);
+        const offsets = active ? null : ssOffsetsForFootprint(fwd.footprint);
         if (!offsets) {
           if (sampleDroste(pixels, droste, fwd.sx, fwd.sy, rgba)) {
             data[idx] = rgba[0]; data[idx + 1] = rgba[1];

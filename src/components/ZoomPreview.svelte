@@ -2,6 +2,7 @@
   import { imageState } from '../lib/stores/image.svelte';
   import { selectionState } from '../lib/stores/selection.svelte';
   import { pipeline } from '../lib/stores/pipeline.svelte';
+  import { interactionState } from '../lib/stores/interaction.svelte';
 
   /**
    * Continuous Droste zoom.
@@ -60,7 +61,11 @@
   });
 
   $effect(() => {
-    if (!playing) return;
+    // Halt t-advancement while the user is dragging a handle. The render
+    // effect still re-fires on geometry change, so the preview tracks the
+    // new nest in real time — only the animation phase freezes. Resumes
+    // automatically on pointerup, when interactionState.active flips back.
+    if (!playing || interactionState.active) return;
     let raf = 0;
     let last = performance.now();
     const tick = (now: number) => {

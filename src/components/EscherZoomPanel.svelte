@@ -31,6 +31,7 @@
    */
 
   import { pipeline, ANIMATED_MAX_W } from '../lib/stores/pipeline.svelte';
+  import { interactionState } from '../lib/stores/interaction.svelte';
   import { createEscherZoomRenderer } from '../lib/render/escher-zoom';
   import type { BackendTier } from '../lib/render/types';
   import Panel from './Panel.svelte';
@@ -58,10 +59,13 @@
 
   // Animation clock — drives t. Pause halts it without losing position.
   // dt is capped at 1/30 s so coming back from a hidden tab (where rAF
-  // was throttled) doesn't catapult t forward in one frame.
+  // was throttled) doesn't catapult t forward in one frame. Also halt while
+  // the user is dragging a handle — the render effect still re-fires on
+  // geometry change, so the spiral re-renders at the frozen t with the new
+  // nest. Resumes on pointerup.
   const MAX_FRAME_DT = 1 / 30;
   $effect(() => {
-    if (!playing) return;
+    if (!playing || interactionState.active) return;
     let raf = 0;
     let last = performance.now();
     const tick = (now: number) => {
