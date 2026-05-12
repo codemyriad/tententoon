@@ -26,8 +26,15 @@
 
   async function trySample() {
     const r = await loadUrl(`${import.meta.env.BASE_URL}Droste_1260359-nevit.jpg`);
-    if (r.ok) setImage(r.image, r.name);
-    else errorMsg = r.reason;
+    if (r.ok) {
+      setImage(r.image, r.name);
+      // Tuned rect for the bundled Droste sample — lands near the
+      // photograph's natural focal point so the spiral preview has a
+      // sensible starting frame instead of a 0×0 rect.
+      doc.rect = { x: 340, y: 327, w: 595, h: 478 };
+    } else {
+      errorMsg = r.reason;
+    }
   }
 
   function onPaste(e: ClipboardEvent) {
