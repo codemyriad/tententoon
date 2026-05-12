@@ -41,21 +41,24 @@
   let bootstrapped = false;
 
   // Routing.
-  //   Pathname `/ui1`, `/ui2`, … select UI-variant pages. New variants
-  //     drop in by adding a component import and a case in the route switch
-  //     below — no router library, no per-page state plumbing (variants
-  //     read the same shared stores as the main view).
+  //   Root `/` serves the canonical UI (UiVariant1) — the editor with
+  //     top bar / canvas / inspector / timeline. This is what the user
+  //     lands on by default.
+  //   `/ui1` is kept around as the legacy log-domain / source-panel
+  //     view (the explorable that pre-dates the editor). The name is
+  //     historical: this used to be the path of the new UI before the
+  //     swap, and the generateVariantPages plugin in vite.config.ts
+  //     still emits dist/ui1/index.html for it.
   //   Hash `#internals` is the legacy parked-panels page (LogPanel +
-  //     RotatedLogPanel). Kept around as a hash route both because it
-  //     pre-dates the path scheme and because hash routes work without
-  //     SPA-fallback configuration on static hosts.
+  //     RotatedLogPanel), reachable inside the legacy view. Kept as a
+  //     hash route both because it pre-dates the path scheme and
+  //     because hash routes work without SPA-fallback configuration on
+  //     static hosts.
   //   Pathname matching is tail-based (`…/ui1` or `…/ui1/`) so the same
   //     code works at root, in a subdirectory deploy (e.g. GitHub Pages
-  //     under `/<repo>/ui1/`), and regardless of whether the host added a
-  //     trailing slash for the directory served by vite.config.ts's
-  //     generateVariantPages plugin. `popstate` covers Back/Forward;
-  //     in-app navigation can use either <a href> (full reload) or
-  //     pushState + a manual `pathname = …` update if it grows in.
+  //     under `/<repo>/ui1/`), and regardless of whether the host added
+  //     a trailing slash for the directory page. `popstate` covers
+  //     Back/Forward; in-app navigation uses `<a href>` (full reload).
   let pathname = $state(typeof window !== 'undefined' ? window.location.pathname : '/');
   let hash = $state(typeof window !== 'undefined' ? window.location.hash : '');
   $effect(() => {
@@ -70,9 +73,14 @@
     };
   });
   const showInternals = $derived(hash === '#internals');
-  const showUi1 = $derived(/(?:^|\/)ui1\/?$/.test(pathname));
+  const showLegacy = $derived(/(?:^|\/)ui1\/?$/.test(pathname));
 
+  // Bootstrap the legacy image store only when the legacy view is
+  // actually being shown. The new UI has its own DropZone + state and
+  // doesn't read imageState; loading the demo into the legacy store on
+  // every page view would be a wasted network round-trip.
   $effect(() => {
+    if (!showLegacy) return;
     if (bootstrapped || imageState.source) return;
     bootstrapped = true;
     (async () => {
@@ -97,10 +105,11 @@
   });
 </script>
 
-{#if showUi1}
+{#if !showLegacy}
   <!--
-    /ui1 owns the full viewport — top bar / tool rail / canvas / inspector /
-    timeline — so we skip the <main> chrome the legacy view uses.
+    Default view: the editor owns the full viewport — top bar / tool
+    rail / canvas / inspector / timeline — so we skip the <main>
+    chrome the legacy view uses.
   -->
   <UiVariant1 />
 {:else}
@@ -155,7 +164,7 @@
     </div>
 
     <p class="muted nav">
-      <a href={`${import.meta.env.BASE_URL}ui1`}>UI variant 1 →</a>
+      <a href="../">← Back to the editor</a>
       ·
       <a href="#internals">Internals: log-domain panels →</a>
     </p>
