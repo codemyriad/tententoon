@@ -120,4 +120,11 @@
     display: flex;
     min-height: 0;
   }
+  /* On narrow viewports the side-by-side split squeezes both panes to
+     uselessly thin columns. Stack them vertically instead — image+rect
+     on top, spiral preview below. The breakpoint is generous because
+     even at 1000 px (devtools open) the side-by-side becomes painful. */
+  @media (max-width: 1000px) {
+    .stages { flex-direction: column; }
+  }
 </style>

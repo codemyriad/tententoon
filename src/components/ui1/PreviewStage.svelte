@@ -163,7 +163,7 @@
   }
   .viewport {
     position: absolute;
-    inset: 24px 24px;
+    inset: 8px;
     border-radius: 4px;
     overflow: hidden;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);

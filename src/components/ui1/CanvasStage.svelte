@@ -48,14 +48,8 @@
     return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z));
   }
 
-  console.log('[ui1-zoom] CanvasStage module loaded');
-
   let viewport: HTMLDivElement | null = $state(null);
   let imageCanvas: HTMLCanvasElement | null = $state(null);
-
-  $effect(() => {
-    console.log('[ui1-zoom] CanvasStage viewport-bind effect: viewport =', !!viewport);
-  });
   let viewW = $state(0);
   let viewH = $state(0);
 
@@ -131,11 +125,7 @@
    * Single source of truth for every zoom change in the editor.
    */
   function applyZoomAt(newZ: number, cssX: number, cssY: number): void {
-    console.log('[ui1-zoom] applyZoomAt called', { newZ, cssX, cssY, fit: !!fit, dispFit: !!dispFit, currentZoom: currentZoom() });
-    if (!fit || !dispFit) {
-      console.log('[ui1-zoom] applyZoomAt EARLY RETURN — fit or dispFit is null', { fit, dispFit, viewW, viewH, image: !!doc.image });
-      return;
-    }
+    if (!fit || !dispFit) return;
     const z = clampZoom(newZ);
     const imgX = (cssX - dispFit.cssX0) / dispFit.scale;
     const imgY = (cssY - dispFit.cssY0) / dispFit.scale;
@@ -143,13 +133,11 @@
     const newPanY = cssY - viewH / 2 + (fit.h * z) / 2 - imgY * fit.scaleCss * z;
     pan = z <= 1 ? { x: 0, y: 0 } : clampPan({ x: newPanX, y: newPanY });
     ui.zoom = z <= 1 ? 'fit' : z;
-    console.log('[ui1-zoom] applyZoomAt wrote state', { newZ: z, ui_zoom: ui.zoom, pan });
   }
 
 
-  // Wheel zoom (desktop).
+  // Wheel zoom (desktop). Attached via the onwheel attribute in the markup.
   function onWheel(e: WheelEvent): void {
-    console.log('[ui1-zoom] onWheel fired', { hasImage: !!doc.image, deltaY: e.deltaY });
     if (!doc.image || !viewport) return;
     e.preventDefault();
     const r = viewport.getBoundingClientRect();
@@ -159,22 +147,17 @@
     applyZoomAt(currentZoom() * factor, cssX, cssY);
   }
 
-  // Listen for tool-rail zoom commands via custom events.
+  // Tool-rail zoom commands come in as custom DOM events.
   $effect(() => {
-    console.log('[ui1-zoom] CanvasStage: registering tententoon-zoom listener on window');
     const onZoomCommand = (ev: Event) => {
       const detail = (ev as CustomEvent<{ kind: 'in' | 'out' | 'fit' }>).detail;
-      console.log('[ui1-zoom] tententoon-zoom event received', detail, { viewW, viewH, fit: !!fit, dispFit: !!dispFit });
       if (!detail) return;
       if (detail.kind === 'in')  applyZoomAt(currentZoom() * 1.25, viewW / 2, viewH / 2);
       if (detail.kind === 'out') applyZoomAt(currentZoom() / 1.25, viewW / 2, viewH / 2);
       if (detail.kind === 'fit') applyZoomAt(1, viewW / 2, viewH / 2);
     };
     window.addEventListener('tententoon-zoom', onZoomCommand);
-    return () => {
-      console.log('[ui1-zoom] CanvasStage: removing tententoon-zoom listener');
-      window.removeEventListener('tententoon-zoom', onZoomCommand);
-    };
+    return () => window.removeEventListener('tententoon-zoom', onZoomCommand);
   });
 
   // 1. Track viewport size.
@@ -516,7 +499,7 @@
     class="viewport"
     bind:this={viewport}
     style:cursor={cursor}
-    onwheel={(e) => { console.log('[ui1-zoom] inline onwheel attribute fired'); onWheel(e); }}
+    onwheel={onWheel}
     onpointerdown={onPointerDown}
     onpointermove={onPointerMove}
     onpointerup={onPointerUp}
@@ -601,13 +584,15 @@
   }
   .viewport {
     position: absolute;
-    inset: 24px 24px;
+    /* Reduced from 24px to 8px so narrow panes don't lose 48px of every
+       axis to decorative dark margin. Editing space matters more than the
+       drop-shadow framing. */
+    inset: 8px;
     border-radius: 4px;
     overflow: hidden;
     box-shadow: 0 8px 24px rgba(0,0,0,0.35);
     touch-action: none;
-    /* cursor is set dynamically via style:cursor in the markup — depends
-       on whether the pointer is over a handle, the rect body, or empty. */
+    /* cursor is set dynamically via style:cursor in the markup. */
   }
   .stage:not(.has-image) .viewport { box-shadow: none; }
   .layer { position: absolute; display: block; }

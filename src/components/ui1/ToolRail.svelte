@@ -6,11 +6,10 @@
     ui.tool = tool;
   }
   const dispatchZoom = (kind: 'in' | 'out' | 'fit') => {
-    console.log('[ui1-zoom] ToolRail.dispatchZoom', kind);
     window.dispatchEvent(new CustomEvent('tententoon-zoom', { detail: { kind } }));
   };
-  const zoomIn = () => { console.log('[ui1-zoom] ToolRail zoomIn button clicked'); dispatchZoom('in'); };
-  const zoomOut = () => { console.log('[ui1-zoom] ToolRail zoomOut button clicked'); dispatchZoom('out'); };
+  const zoomIn = () => dispatchZoom('in');
+  const zoomOut = () => dispatchZoom('out');
 </script>
 
 <nav class="rail" aria-label="Tools">
