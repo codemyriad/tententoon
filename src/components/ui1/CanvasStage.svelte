@@ -37,6 +37,7 @@
     commitNewRect,
     commitTranslate,
     commitResize,
+    commitCropTranslate,
     type Rect
   } from '../../lib/ui1/state.svelte';
   import { snapRectToAspect, phase } from '../../lib/ui1/render';
@@ -197,6 +198,7 @@
   type DragKind =
     | { kind: 'marquee'; startImg: { x: number; y: number } }
     | { kind: 'body'; startRect: Rect; startImg: { x: number; y: number } }
+    | { kind: 'crop-body'; startCrop: Rect; startImg: { x: number; y: number } }
     | {
         kind: 'handle';
         name: string;
@@ -246,6 +248,11 @@
     if (h) { cursor = handleCursor(h); return; }
     const img = eventToImage(e);
     if (img && hasRect && inRect(img)) { cursor = 'move'; return; }
+    // In the crop margin (inside the working frame, outside the nest):
+    // signal "grab" so the user knows they can drag the crop. Skip the
+    // hint when the crop already fills the image on both axes — there's
+    // nowhere to slide it.
+    if (img && hasRect && inCrop(img) && cropMovable()) { cursor = 'grab'; return; }
     if (ui.tool === 'pan') { cursor = 'grab'; return; }
     cursor = ui.tool === 'rect' ? 'crosshair' : 'default';
   }
@@ -297,6 +304,21 @@
   function inRect(img: { x: number; y: number }): boolean {
     return img.x >= doc.rect.x && img.x <= doc.rect.x + doc.rect.w
       && img.y >= doc.rect.y && img.y <= doc.rect.y + doc.rect.h;
+  }
+
+  function inCrop(img: { x: number; y: number }): boolean {
+    const c = doc.crop;
+    if (!c) return false;
+    return img.x >= c.x && img.x <= c.x + c.w && img.y >= c.y && img.y <= c.y + c.h;
+  }
+
+  /** True when there's room to translate the crop in at least one axis —
+   *  i.e. the crop is strictly smaller than the image somewhere. When
+   *  false, the cursor stays default over the crop margin since dragging
+   *  would be a no-op. */
+  function cropMovable(): boolean {
+    if (!doc.image || !doc.crop) return false;
+    return doc.crop.w < doc.image.width || doc.crop.h < doc.image.height;
   }
 
   function clampImg(p: { x: number; y: number }): { x: number; y: number } {
@@ -391,6 +413,15 @@
       drag = { kind: 'body', startRect: { ...doc.rect }, startImg: img };
       return;
     }
+    // Crop margin (between the nest and the working-frame outline):
+    // drag translates the crop while the nest stays put in image coords.
+    // Skip when the crop has no room to move (fills the image on both
+    // axes) — falling through to marquee/pan is more useful there.
+    if (hasRect && doc.crop && inCrop(img) && cropMovable()) {
+      drag = { kind: 'crop-body', startCrop: { ...doc.crop }, startImg: img };
+      cursor = 'grabbing';
+      return;
+    }
     if (ui.tool === 'pan') {
       drag = { kind: 'pan', startCss: cp, startPan: { ...pan } };
       return;
@@ -453,6 +484,17 @@
       });
       return;
     }
+    if (drag.kind === 'crop-body') {
+      const dx = img.x - drag.startImg.x;
+      const dy = img.y - drag.startImg.y;
+      commitCropTranslate({
+        x: drag.startCrop.x + dx,
+        y: drag.startCrop.y + dy,
+        w: drag.startCrop.w,
+        h: drag.startCrop.h
+      });
+      return;
+    }
     if (drag.kind === 'handle') {
       // Edge handles (n, s, e, w) constrain to a single axis — only the
       // perpendicular dimension changes; the parallel one stays. Without
@@ -507,11 +549,15 @@
       return;
     }
     if (!drag) return;
+    // Crop-body drags don't touch the nest — skip the rect normalise
+    // pass; commitCropTranslate already clamped the crop on every
+    // frame and the nest is unchanged.
+    const wasCropBody = drag.kind === 'crop-body';
     drag = null;
-    // Normalise: clamp to image and ensure min size. Funnel through
-    // commitResize so the crop refits if the clamp changed the rect's
-    // dimensions, and clears when the rect collapses to zero.
-    if (doc.image) {
+    if (doc.image && !wasCropBody) {
+      // Normalise: clamp to image and ensure min size. Funnel through
+      // commitResize so the crop refits if the clamp changed the rect's
+      // dimensions, and clears when the rect collapses to zero.
       const minSide = 8;
       let r = doc.rect;
       r = { x: Math.max(0, r.x), y: Math.max(0, r.y), w: Math.min(doc.image.width - Math.max(0, r.x), r.w), h: Math.min(doc.image.height - Math.max(0, r.y), r.h) };

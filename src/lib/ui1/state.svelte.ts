@@ -133,6 +133,34 @@ export function commitResize(rect: Rect): void {
   doc.rect = ensureNestInside(doc.rect as DrosteRect, doc.crop);
 }
 
+/**
+ * Crop translate: the user dragging the working frame around the (now
+ * stationary) nest. Clamps the proposed crop position to two
+ * constraints — the crop must (a) stay inside the image and (b)
+ * still fully contain the nest. The nest is NOT moved; only the
+ * crop's x/y change. Width/height come from doc.crop and are
+ * preserved (translate, not resize).
+ */
+export function commitCropTranslate(next: Rect): void {
+  if (!doc.image || !doc.crop) return;
+  const img = imageSize()!;
+  const nest = doc.rect;
+  const minX = Math.max(0, nest.x + nest.w - next.w);
+  const maxX = Math.min(img.width - next.w, nest.x);
+  const minY = Math.max(0, nest.y + nest.h - next.h);
+  const maxY = Math.min(img.height - next.h, nest.y);
+  // No valid position (shouldn't happen — fitCropToNest always returns
+  // a crop ⊇ nest that's also ⊆ image, so the intersection is non-empty
+  // when called from CanvasStage). Bail safely if it ever does.
+  if (minX > maxX || minY > maxY) return;
+  doc.crop = {
+    x: Math.max(minX, Math.min(maxX, next.x)),
+    y: Math.max(minY, Math.min(maxY, next.y)),
+    w: next.w,
+    h: next.h
+  };
+}
+
 /** Image's aspect ratio (W/H) or 0 when no image. */
 export function imageAspect(): number {
   return doc.image ? doc.image.width / doc.image.height : 0;
