@@ -45,7 +45,7 @@ export const ICON = {
   viewPreview:
     '<rect x="3" y="3" width="18" height="18" rx="1"/><rect x="7" y="7" width="10" height="10" rx="0.5"/><rect x="10" y="10" width="4" height="4" rx="0.5"/>',
   share:
-    '<path d="M12 16V4"/><path d="M8 8l4-4 4 4"/><path d="M20 12v8a2 2 0 01-2 2H6a2 2 0 01-2-2v-8"/>'
+    '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98"/><path d="M15.41 6.51l-6.82 3.98"/>'
 } as const;
 
 export type IconName = keyof typeof ICON;
