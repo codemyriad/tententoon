@@ -2,7 +2,7 @@
   import Icon from './Icon.svelte';
   import { ui, doc, playback } from '../../lib/ui1/state.svelte';
   import { exportPng } from '../../lib/ui1/exports/png';
-  import { exportVideo, pickMimeType } from '../../lib/ui1/exports/mp4';
+  import { exportVideo } from '../../lib/ui1/exports/mp4';
 
   // Caller passes a per-frame render fn (which renders to ANY canvas at
   // a given progress t ∈ [0,1)). The MP4 export now drives a hidden
@@ -19,17 +19,15 @@
   // Cancellation flag handed to exportVideo so it can bail on next frame.
   let videoCancel: { cancelled: boolean } | null = null;
 
-  const videoExt = $derived.by(() => pickMimeType()?.ext ?? 'webm');
-
   async function doPng() {
     if (!doc.image || busy) return;
     busy = true;
     ui.exportMenuOpen = false;
     try {
       await exportPng(doc.image, doc.rect, basename('.png'));
-      ui.exportToast = 'PNG saved.';
+      ui.exportToast = 'Image saved.';
     } catch (e) {
-      ui.exportToast = `PNG failed: ${e instanceof Error ? e.message : String(e)}`;
+      ui.exportToast = `Image export failed: ${e instanceof Error ? e.message : String(e)}`;
     } finally {
       busy = false;
       hideToastAfter();
@@ -43,7 +41,7 @@
     videoProgress = 0;
     videoCancel = { cancelled: false };
     try {
-      const { ext } = await exportVideo({
+      await exportVideo({
         imageWidth: doc.image.width,
         imageHeight: doc.image.height,
         loopSeconds: playback.loopLength,
@@ -52,10 +50,10 @@
         signal: videoCancel,
         onProgress: (p) => { videoProgress = p.fraction; }
       });
-      ui.exportToast = `Saved .${ext}.`;
+      ui.exportToast = 'Video saved.';
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      ui.exportToast = msg === 'cancelled' ? 'Export cancelled.' : `Video failed: ${msg}`;
+      ui.exportToast = msg === 'cancelled' ? 'Export cancelled.' : `Video export failed: ${msg}`;
     } finally {
       videoProgress = null;
       videoCancel = null;
@@ -92,27 +90,26 @@
 
 {#if ui.exportMenuOpen}
   <div class="menu" role="menu">
-    <div class="header">EXPORT AS</div>
+    <div class="header">SAVE AS</div>
     <button class="item" disabled={busy || !doc.image} onclick={doPng}>
       <span class="ic"><Icon name="image" size={14} /></span>
       <span class="text">
-        <span class="t">PNG</span>
-        <span class="s">Still frame · {doc.image?.width ?? 0}×{doc.image?.height ?? 0}</span>
+        <span class="t">Image</span>
+        <span class="s">A picture of this view · {doc.image?.width ?? 0}×{doc.image?.height ?? 0}</span>
       </span>
       <span class="dl"><Icon name="download" size={14} /></span>
     </button>
-    <button class="item hi" disabled={busy || !doc.image} onclick={doVideo}>
+    <button class="item" disabled={busy || !doc.image} onclick={doVideo}>
       <span class="ic"><Icon name="film" size={14} /></span>
       <span class="text">
-        <span class="t">{videoExt.toUpperCase()}</span>
-        <span class="s">{playback.loopLength.toFixed(0)}s loop · isolated render, can't be disturbed</span>
+        <span class="t">Video</span>
+        <span class="s">A {playback.loopLength.toFixed(0)}-second looping clip · keeps recording while you explore</span>
       </span>
       <span class="dl"><Icon name="download" size={14} /></span>
     </button>
     <div class="rule"></div>
     <div class="foot">
-      <span>All exports run locally</span>
-      <span class="mono">⌘E</span>
+      <span>Your image never leaves this device — it's yours, not ours.</span>
     </div>
   </div>
 {/if}
@@ -128,7 +125,7 @@
 {#if videoProgress !== null}
   <div class="recording-mask" role="dialog" aria-modal="true" aria-label="Exporting video">
     <div class="recording-card">
-      <div class="rec-title">Exporting {videoExt.toUpperCase()}…</div>
+      <div class="rec-title">Exporting video…</div>
       <div class="rec-bar" role="progressbar" aria-valuenow={Math.round(videoProgress * 100)} aria-valuemin="0" aria-valuemax="100">
         <div class="rec-bar-fill" style:width="{(videoProgress * 100).toFixed(1)}%"></div>
       </div>
@@ -181,8 +178,6 @@
   }
   .item:hover:not(:disabled) { background: var(--panel-2); }
   .item:disabled { opacity: 0.5; cursor: not-allowed; }
-  .item.hi { background: var(--accent-soft); }
-  .item.hi .ic { color: var(--accent); }
   .ic { color: var(--ink-2); display: inline-flex; }
   .text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
   .t { font-size: 13px; font-weight: 600; }
@@ -193,8 +188,7 @@
     padding: 4px 10px 6px;
     font-size: 11px;
     color: var(--muted);
-    display: flex;
-    justify-content: space-between;
+    line-height: 1.35;
   }
   .mono { font-family: var(--font-mono); }
   .recording-mask {

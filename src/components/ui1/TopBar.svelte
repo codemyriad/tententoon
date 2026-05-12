@@ -132,7 +132,10 @@
     border-color: var(--accent);
     box-shadow: 0 1px 0 rgba(0,0,0,0.05);
   }
-  .btn.primary:hover:not(:disabled) { filter: brightness(1.05); }
+  .btn.primary:hover:not(:disabled) {
+    background: var(--accent);
+    filter: brightness(1.08);
+  }
   .caret { opacity: 0.7; margin-left: 2px; display: inline-flex; }
   .exp-wrap { position: relative; }
 </style>
