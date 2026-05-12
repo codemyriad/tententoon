@@ -9,9 +9,10 @@
   import UiVariant1 from './components/UiVariant1.svelte';
   import { imageState, loadImageFromUrl, restoreLastSession } from './lib/stores/image.svelte';
   import { identityOf, readSelection, writeSelection, type StoredSelection } from './lib/persistence';
+  import { publicAssetUrl } from './lib/asset-url';
 
-  const EXAMPLE_URL = `${import.meta.env.BASE_URL}Droste_1260359-nevit.jpg`;
-  const LOCAL_URL = `${import.meta.env.BASE_URL}droste-image.jpg`;
+  const EXAMPLE_URL = publicAssetUrl('Droste_1260359-nevit.jpg');
+  const LOCAL_URL = publicAssetUrl('droste-image.jpg');
 
   // Default starting selection for the example image (1280×960). The nest is
   // shifted slightly off image-aspect, the crop is the matching minimum

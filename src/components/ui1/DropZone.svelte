@@ -2,6 +2,7 @@
   import Icon from './Icon.svelte';
   import { ui, doc, setImage } from '../../lib/ui1/state.svelte';
   import { loadFile, loadUrl } from '../../lib/ui1/file';
+  import { publicAssetUrl } from '../../lib/asset-url';
 
   let dragOver = $state(false);
   let input: HTMLInputElement;
@@ -25,7 +26,7 @@
   }
 
   async function trySample() {
-    const r = await loadUrl(`${import.meta.env.BASE_URL}Droste_1260359-nevit.jpg`);
+    const r = await loadUrl(publicAssetUrl('Droste_1260359-nevit.jpg'));
     if (r.ok) {
       setImage(r.image, r.name);
       // Tuned rect for the bundled Droste sample — lands near the
