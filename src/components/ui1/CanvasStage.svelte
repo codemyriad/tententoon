@@ -194,7 +194,15 @@
   type DragKind =
     | { kind: 'marquee'; startImg: { x: number; y: number } }
     | { kind: 'body'; startRect: Rect; startImg: { x: number; y: number } }
-    | { kind: 'handle'; opposite: { x: number; y: number }; signX: -1 | 1; signY: -1 | 1; centerStart: { x: number; y: number } | null }
+    | {
+        kind: 'handle';
+        name: string;
+        startRect: Rect;
+        opposite: { x: number; y: number };
+        signX: -1 | 1;
+        signY: -1 | 1;
+        centerStart: { x: number; y: number } | null;
+      }
     | { kind: 'pan'; startCss: { x: number; y: number }; startPan: { x: number; y: number } };
   let drag: DragKind | null = null;
 
@@ -373,7 +381,7 @@
       const signX: -1 | 1 = handle.includes('e') ? 1 : -1;
       const signY: -1 | 1 = handle.includes('s') ? 1 : -1;
       const centerStart = e.altKey ? { x: r.x + r.w / 2, y: r.y + r.h / 2 } : null;
-      drag = { kind: 'handle', opposite: { x: oppX, y: oppY }, signX, signY, centerStart };
+      drag = { kind: 'handle', name: handle, startRect: { ...r }, opposite: { x: oppX, y: oppY }, signX, signY, centerStart };
       return;
     }
     if (hasRect && inRect(img)) {
@@ -436,16 +444,35 @@
       return;
     }
     if (drag.kind === 'handle') {
+      // Edge handles (n, s, e, w) constrain to a single axis — only the
+      // perpendicular dimension changes; the parallel one stays. Without
+      // this, dragging the top-middle handle horizontally collapses the
+      // rect to zero width because the pointer's X relative to the rect
+      // centre IS the new width.
+      const onlyX = drag.name === 'e' || drag.name === 'w';
+      const onlyY = drag.name === 'n' || drag.name === 's';
       let nx: number, ny: number, nw: number, nh: number;
       if (drag.centerStart) {
-        // Alt: resize from centre.
-        const dx = Math.abs(img.x - drag.centerStart.x);
-        const dy = Math.abs(img.y - drag.centerStart.y);
+        // Alt: resize from centre. Edge handles still only flex one axis.
+        const c = drag.centerStart;
+        const dx = onlyY ? drag.startRect.w / 2 : Math.abs(img.x - c.x);
+        const dy = onlyX ? drag.startRect.h / 2 : Math.abs(img.y - c.y);
         nw = dx * 2;
         nh = dy * 2;
-        nx = drag.centerStart.x - nw / 2;
-        ny = drag.centerStart.y - nh / 2;
+        nx = c.x - nw / 2;
+        ny = c.y - nh / 2;
+      } else if (onlyX) {
+        nw = Math.abs(img.x - drag.opposite.x);
+        nh = drag.startRect.h;
+        nx = drag.signX === 1 ? drag.opposite.x : drag.opposite.x - nw;
+        ny = drag.startRect.y;
+      } else if (onlyY) {
+        nw = drag.startRect.w;
+        nh = Math.abs(img.y - drag.opposite.y);
+        nx = drag.startRect.x;
+        ny = drag.signY === 1 ? drag.opposite.y : drag.opposite.y - nh;
       } else {
+        // corner
         nw = Math.abs(img.x - drag.opposite.x);
         nh = Math.abs(img.y - drag.opposite.y);
         nx = drag.signX === 1 ? drag.opposite.x : drag.opposite.x - nw;
