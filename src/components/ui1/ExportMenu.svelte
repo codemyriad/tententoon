@@ -23,13 +23,13 @@
   let cancelFlag: { cancelled: boolean } | null = null;
 
   async function doPng() {
-    if (!doc.image || busy) return;
+    if (!doc.image || !doc.crop || busy) return;
     busy = true;
     ui.exportMenuOpen = false;
     progress = { kind: 'image', fraction: 0 };
     cancelFlag = { cancelled: false };
     try {
-      await exportPng(doc.image, doc.rect, {
+      await exportPng(doc.image, doc.rect, doc.crop, {
         filename: basename('.png'),
         signal: cancelFlag,
         onProgress: (f) => { progress = { kind: 'image', fraction: f }; }

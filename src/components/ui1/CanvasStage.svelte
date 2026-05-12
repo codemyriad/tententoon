@@ -34,6 +34,9 @@
     doc,
     ui,
     chipAspect,
+    commitNewRect,
+    commitTranslate,
+    commitResize,
     type Rect
   } from '../../lib/ui1/state.svelte';
   import { snapRectToAspect, phase } from '../../lib/ui1/render';
@@ -394,7 +397,10 @@
     }
     if (ui.tool === 'rect') {
       drag = { kind: 'marquee', startImg: img };
-      doc.rect = { x: img.x, y: img.y, w: 0, h: 0 };
+      // Clear any prior rect/crop; the marquee will commit the new one
+      // through commitResize on the first pointermove (so the crop
+      // recentres on the nest, not on the now-stale prior crop).
+      commitNewRect({ x: img.x, y: img.y, w: 0, h: 0 });
     }
   }
 
@@ -429,18 +435,22 @@
       const b = { x: Math.max(drag.startImg.x, img.x), y: Math.max(drag.startImg.y, img.y) };
       let next: Rect = { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
       next = applyMods(next, e);
-      doc.rect = next;
+      // Marquee: each frame re-fits the crop to the growing rect. We
+      // pass through commitNewRect (anchor = nest) rather than
+      // commitResize (anchor = prev crop centre) so the crop tracks
+      // the growing marquee rather than ballooning around stale state.
+      commitNewRect(next);
       return;
     }
     if (drag.kind === 'body') {
       const dx = img.x - drag.startImg.x;
       const dy = img.y - drag.startImg.y;
-      doc.rect = {
+      commitTranslate({
         x: drag.startRect.x + dx,
         y: drag.startRect.y + dy,
         w: drag.startRect.w,
         h: drag.startRect.h
-      };
+      });
       return;
     }
     if (drag.kind === 'handle') {
@@ -480,7 +490,7 @@
       }
       let next: Rect = { x: nx, y: ny, w: nw, h: nh };
       next = applyMods(next, e);
-      doc.rect = next;
+      commitResize(next);
     }
   }
 
@@ -498,7 +508,9 @@
     }
     if (!drag) return;
     drag = null;
-    // Normalise: clamp to image and ensure min size.
+    // Normalise: clamp to image and ensure min size. Funnel through
+    // commitResize so the crop refits if the clamp changed the rect's
+    // dimensions, and clears when the rect collapses to zero.
     if (doc.image) {
       const minSide = 8;
       let r = doc.rect;
@@ -506,7 +518,7 @@
       if (r.w < minSide || r.h < minSide) {
         r = { x: 0, y: 0, w: 0, h: 0 };
       }
-      doc.rect = r;
+      commitResize(r);
     }
   }
 
@@ -519,6 +531,19 @@
     // the rect's top-left tracks the image but its dimensions stay at zoom=1,
     // so it drifts as you zoom.
     return { x: tl.x, y: tl.y, w: doc.rect.w * dispFit.scale, h: doc.rect.h * dispFit.scale };
+  });
+
+  // The working-image crop is committed state (doc.crop) — shown as a
+  // faded dashed outline so the user can see what region the renderer
+  // is actually sampling. The crop stays put when the user translates
+  // the nest, and only resizes on handle drags / fresh marquees; this
+  // gives a stable reference frame instead of a working window that
+  // chases the cursor.
+  const overlayCrop = $derived.by(() => {
+    if (!hasRect || !dispFit || !doc.crop) return null;
+    const c = doc.crop;
+    const tl = imgToCss(c.x, c.y);
+    return { x: tl.x, y: tl.y, w: c.w * dispFit.scale, h: c.h * dispFit.scale };
   });
 </script>
 
@@ -559,6 +584,20 @@
             </mask>
           </defs>
           <rect width="100%" height="100%" fill="rgba(0,0,0,0.32)" mask="url(#ui1-mask)" />
+          {#if overlayCrop}
+            <!-- working-image crop: dashed faded outline so the user
+                 sees what the renderer is actually sampling. -->
+            <rect
+              x={overlayCrop.x + 0.5}
+              y={overlayCrop.y + 0.5}
+              width={overlayCrop.w - 1}
+              height={overlayCrop.h - 1}
+              fill="none"
+              stroke="rgba(255,255,255,0.55)"
+              stroke-width="1"
+              stroke-dasharray="6 4"
+            />
+          {/if}
           <rect
             x={overlayRect.x + 0.5}
             y={overlayRect.y + 0.5}

@@ -27,35 +27,45 @@ export type RenderInputs = {
 };
 
 /**
- * Compute renderer inputs from the current /ui1 state + a canvas size,
- * or return null when the state isn't ready (no image, zero rect).
+ * Compute renderer inputs from the rect + a working-image crop (the
+ * stable frame committed via state.svelte.ts's setRect helpers) and
+ * a target canvas size. Returns null when the inputs aren't ready.
+ *
+ * The math runs against the crop, not the full image: S = crop.w /
+ * rect.w, limit point in crop-local coords, and sampling translates
+ * back to original-image coords via DrosteCtx's cropX/cropY.
  */
 export function buildRenderInputs(
-  image: ImageBitmap,
   pixels: ImageData,
-  rect: { x: number; y: number; w: number; h: number },
+  rect: DrosteRect,
+  crop: DrosteRect,
   canvasW: number,
   canvasH: number
 ): RenderInputs | null {
-  if (rect.w <= 0 || rect.h <= 0) return null;
-  // For now /ui1 ignores the crop concept — the working image IS the full
-  // image. The HANDOFF doesn't surface "crop" as a separate dimension.
-  const imageSize = { width: image.width, height: image.height };
-  const droste = drosteGeometry(imageSize, rect satisfies DrosteRect);
+  if (rect.w <= 0 || rect.h <= 0 || crop.w <= 0 || crop.h <= 0) return null;
+  // Translate the nest into crop-local coords for drosteGeometry, which
+  // assumes the working image starts at (0, 0).
+  const localRect: DrosteRect = {
+    x: rect.x - crop.x,
+    y: rect.y - crop.y,
+    w: rect.w,
+    h: rect.h
+  };
+  const droste = drosteGeometry({ width: crop.w, height: crop.h }, localRect);
   const drosteCtx: DrosteCtx = {
     cx: droste.limit.x,
     cy: droste.limit.y,
     logS: droste.logS,
     rMax: droste.rMax,
-    W: image.width,
-    H: image.height,
-    cropX: 0,
-    cropY: 0,
+    W: crop.w,
+    H: crop.h,
+    cropX: crop.x,
+    cropY: crop.y,
     sampleScale: 1
   };
   const R0 = droste.rMax / Math.sqrt(droste.S);
-  const scaleW = canvasW / image.width;
-  const scaleH = canvasH / image.height;
+  const scaleW = canvasW / crop.w;
+  const scaleH = canvasH / crop.h;
   const scale = Math.min(scaleW, scaleH);
   return {
     pixels,

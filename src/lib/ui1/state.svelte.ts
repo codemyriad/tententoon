@@ -11,6 +11,8 @@
  *    was when the export started.)
  */
 
+import { fitCropToNest, ensureNestInside, type Rect as DrosteRect } from '../math/droste';
+
 export type Tool = 'select' | 'rect' | 'pan';
 export type AspectKind = 'match-image' | 'free' | '1:1' | '16:9';
 export type Direction = 'in' | 'out';
@@ -37,11 +39,21 @@ export const doc = $state<{
   image: ImageBitmap | null;
   imageName: string;
   rect: Rect;
+  /**
+   * Working-image crop: the rectangle the renderer treats as its
+   * input frame. Stored as state (rather than purely derived from
+   * `rect`) so that translating the nest leaves the crop stable —
+   * the user gets a steady reference frame instead of a working
+   * window that follows the cursor. Refits on resize, on a fresh
+   * marquee draw, or on image change; nulled when no rect is set.
+   */
+  crop: Rect | null;
   aspect: AspectKind;
 }>({
   image: null,
   imageName: '',
   rect: { x: 0, y: 0, w: 0, h: 0 },
+  crop: null,
   aspect: 'match-image'
 });
 
@@ -63,14 +75,62 @@ export const playback = $state<{
   exporting: false
 });
 
-/** Replace the working image and clear the rect. */
+/** Replace the working image and clear the rect + crop. */
 export function setImage(image: ImageBitmap | null, name = ''): void {
   doc.image?.close?.();
   doc.image = image;
   doc.imageName = name;
   doc.rect = { x: 0, y: 0, w: 0, h: 0 };
+  doc.crop = null;
   playback.playing = false;
   playback.t = 0;
+}
+
+// --- Rect/crop commit helpers ------------------------------------------
+//
+// Three commit shapes, mirroring the legacy selection.svelte.ts:setNest
+// semantics. Drag handlers in CanvasStage call the matching helper
+// instead of writing doc.rect directly, so the crop bookkeeping happens
+// in one place.
+
+function imageSize(): { width: number; height: number } | null {
+  if (!doc.image) return null;
+  return { width: doc.image.width, height: doc.image.height };
+}
+
+/**
+ * Initial commit for a fresh marquee draw or any time we want the crop
+ * to recentre on the nest. Crop fits around the nest, anchored on it.
+ */
+export function commitNewRect(rect: Rect): void {
+  doc.rect = rect;
+  const sz = imageSize();
+  if (!sz || rect.w <= 0 || rect.h <= 0) { doc.crop = null; return; }
+  doc.crop = fitCropToNest(sz, rect as DrosteRect, null);
+}
+
+/**
+ * Body translate. Crop stays put; the nest is shifted minimally to
+ * stay inside it. Falls back to commitNewRect when there's no crop
+ * yet (first interaction after image load).
+ */
+export function commitTranslate(rect: Rect): void {
+  if (!doc.crop) { commitNewRect(rect); return; }
+  doc.rect = ensureNestInside(rect as DrosteRect, doc.crop);
+}
+
+/**
+ * Handle/marquee resize. Crop refits with the previous crop's centre
+ * as anchor, so the working frame stays stable across pure-translate
+ * gestures but resizes when the aspect changes or the nest outgrows
+ * the current crop.
+ */
+export function commitResize(rect: Rect): void {
+  doc.rect = rect;
+  const sz = imageSize();
+  if (!sz || rect.w <= 0 || rect.h <= 0) { doc.crop = null; return; }
+  doc.crop = fitCropToNest(sz, rect as DrosteRect, doc.crop);
+  doc.rect = ensureNestInside(doc.rect as DrosteRect, doc.crop);
 }
 
 /** Image's aspect ratio (W/H) or 0 when no image. */

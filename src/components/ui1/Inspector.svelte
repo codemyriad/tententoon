@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
-  import { doc, playback, type AspectKind, type Direction } from '../../lib/ui1/state.svelte';
+  import { doc, playback, commitResize, type AspectKind, type Direction } from '../../lib/ui1/state.svelte';
   import { snapRectToAspect, phase } from '../../lib/ui1/render';
 
   const aspects: AspectKind[] = ['match-image', 'free', '1:1', '16:9'];
@@ -12,12 +12,14 @@
   };
   function setAspect(a: AspectKind) {
     doc.aspect = a;
+    // Aspect snaps change the rect's dimensions, so go through
+    // commitResize to refit the working crop around the new aspect.
     if (a === 'match-image' && doc.image) {
-      doc.rect = snapRectToAspect(doc.rect, doc.image.width / doc.image.height);
+      commitResize(snapRectToAspect(doc.rect, doc.image.width / doc.image.height));
     } else if (a === '1:1') {
-      doc.rect = snapRectToAspect(doc.rect, 1);
+      commitResize(snapRectToAspect(doc.rect, 1));
     } else if (a === '16:9') {
-      doc.rect = snapRectToAspect(doc.rect, 16 / 9);
+      commitResize(snapRectToAspect(doc.rect, 16 / 9));
     }
   }
 
@@ -31,6 +33,10 @@
 
   const ready = $derived(phase() !== 'empty');
   const hasRect = $derived(phase() === 'edit' || phase() === 'playing');
+  // The working-image crop the renderer is sampling. Read straight
+  // from state — it's now stable through translates (only resizes /
+  // fresh marquees refit it), matching the legacy nest-vs-crop UX.
+  const crop = $derived(hasRect ? doc.crop : null);
 </script>
 
 <aside class="inspector">
@@ -58,6 +64,12 @@
           <span class="value mono">{fmtNum(doc.rect.h)}<span class="unit">px</span></span>
         </span>
       </div>
+      {#if crop}
+        <div class="crop-row">
+          <span class="label">Working crop</span>
+          <span class="value mono">{fmtNum(crop.w)}×{fmtNum(crop.h)}<span class="unit">px</span></span>
+        </div>
+      {/if}
     {:else if ready}
       <p class="empty">Drag on the canvas to draw a rectangle.</p>
     {:else}
@@ -160,6 +172,7 @@
     font-variant-numeric: tabular-nums;
   }
   .unit { color: var(--muted); font-size: 10px; margin-left: 6px; }
+  .crop-row { display: flex; flex-direction: column; gap: 4px; }
   .seg-wrap { display: flex; flex-direction: column; gap: 6px; }
   .segmented {
     display: inline-flex;

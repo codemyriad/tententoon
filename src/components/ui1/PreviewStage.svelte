@@ -32,12 +32,16 @@
   let viewW = $state(0);
   let viewH = $state(0);
 
-  // The preview canvas fits the IMAGE's aspect inside the available space
-  // — letterboxed so the spiral stays geometrically correct regardless of
-  // pane proportions.
+  // Preview canvas is letterboxed to the CROP's aspect — the working
+  // frame the renderer is actually sampling. Before a rect/crop is set
+  // we fall back to the image aspect so the empty-state placeholder
+  // still has a sensible footprint.
   const fit = $derived.by(() => {
     if (!doc.image || viewW <= 0 || viewH <= 0) return null;
-    const ia = doc.image.width / doc.image.height;
+    const c = doc.crop;
+    const aw = c ? c.w : doc.image.width;
+    const ah = c ? c.h : doc.image.height;
+    const ia = aw / ah;
     const va = viewW / viewH;
     let w: number, h: number;
     if (va > ia) { h = viewH; w = h * ia; } else { w = viewW; h = w / ia; }
@@ -88,12 +92,12 @@
   });
 
   $effect(() => {
-    if (!renderer || !canvas || !doc.image || !pixels || !fit || !hasRect) return;
+    if (!renderer || !canvas || !doc.image || !pixels || !fit || !hasRect || !doc.crop) return;
     const dpr = window.devicePixelRatio || 1;
     const w = Math.max(1, Math.round(fit.w * dpr));
     const h = Math.max(1, Math.round(fit.h * dpr));
     void playback.t;
-    const inputs = buildRenderInputs(doc.image, pixels, doc.rect, w, h);
+    const inputs = buildRenderInputs(pixels, doc.rect, doc.crop, w, h);
     if (!inputs) return;
     renderer.render(inputs);
   });
@@ -136,14 +140,14 @@
   let exportCanvasRef: HTMLCanvasElement | null = null;
 
   async function renderFrameToOffscreen(off: HTMLCanvasElement, t: number): Promise<void> {
-    if (!doc.image || !pixels) return;
+    if (!doc.image || !pixels || !doc.crop) return;
     if (exportCanvasRef !== off) {
       exportRenderer?.dispose();
       exportRenderer = createEscherZoomRenderer({ forceTier: 'webgl2-main' });
       await exportRenderer.init(off);
       exportCanvasRef = off;
     }
-    const u = buildRenderInputs(doc.image, pixels, doc.rect, off.width, off.height);
+    const u = buildRenderInputs(pixels, doc.rect, doc.crop, off.width, off.height);
     if (!u || !exportRenderer) return;
     const effT = playback.direction === 'in' ? t : 1 - t;
     exportRenderer.render({ ...u, t: effT });

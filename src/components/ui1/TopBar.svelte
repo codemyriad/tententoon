@@ -1,7 +1,7 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
   import ExportMenu from './ExportMenu.svelte';
-  import { ui, doc, setImage } from '../../lib/ui1/state.svelte';
+  import { ui, doc, setImage, commitNewRect } from '../../lib/ui1/state.svelte';
   import { loadFile } from '../../lib/ui1/file';
 
   type Props = {
@@ -13,7 +13,9 @@
   let input: HTMLInputElement;
 
   function reset() {
-    doc.rect = { x: 0, y: 0, w: 0, h: 0 };
+    // Zero rect → commitNewRect also nulls doc.crop so the working
+    // frame returns to "none" alongside the rect.
+    commitNewRect({ x: 0, y: 0, w: 0, h: 0 });
   }
 
   async function replace() {

@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
-  import { ui, doc, setImage } from '../../lib/ui1/state.svelte';
+  import { ui, doc, setImage, commitNewRect } from '../../lib/ui1/state.svelte';
   import { loadFile, loadUrl } from '../../lib/ui1/file';
   import { publicAssetUrl } from '../../lib/asset-url';
 
@@ -32,7 +32,7 @@
       // Tuned rect for the bundled Droste sample — lands near the
       // photograph's natural focal point so the spiral preview has a
       // sensible starting frame instead of a 0×0 rect.
-      doc.rect = { x: 340, y: 327, w: 595, h: 478 };
+      commitNewRect({ x: 340, y: 327, w: 595, h: 478 });
     } else {
       errorMsg = r.reason;
     }

@@ -21,7 +21,7 @@
   import Inspector from './ui1/Inspector.svelte';
   import Timeline from './ui1/Timeline.svelte';
   import DropZone from './ui1/DropZone.svelte';
-  import { ui, doc, playback } from '../lib/ui1/state.svelte';
+  import { ui, doc, playback, commitTranslate } from '../lib/ui1/state.svelte';
   import { phase } from '../lib/ui1/render';
 
   // Plumbing the live canvas + a render-frame fn up to the export menu in
@@ -52,10 +52,10 @@
       ui.exportMenuOpen = false;
     } else if (doc.rect.w > 0 && doc.rect.h > 0) {
       const step = e.shiftKey ? 10 : 1;
-      if (e.key === 'ArrowLeft')  { e.preventDefault(); doc.rect = { ...doc.rect, x: doc.rect.x - step }; }
-      if (e.key === 'ArrowRight') { e.preventDefault(); doc.rect = { ...doc.rect, x: doc.rect.x + step }; }
-      if (e.key === 'ArrowUp')    { e.preventDefault(); doc.rect = { ...doc.rect, y: doc.rect.y - step }; }
-      if (e.key === 'ArrowDown')  { e.preventDefault(); doc.rect = { ...doc.rect, y: doc.rect.y + step }; }
+      if (e.key === 'ArrowLeft')  { e.preventDefault(); commitTranslate({ ...doc.rect, x: doc.rect.x - step }); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); commitTranslate({ ...doc.rect, x: doc.rect.x + step }); }
+      if (e.key === 'ArrowUp')    { e.preventDefault(); commitTranslate({ ...doc.rect, y: doc.rect.y - step }); }
+      if (e.key === 'ArrowDown')  { e.preventDefault(); commitTranslate({ ...doc.rect, y: doc.rect.y + step }); }
     }
   }
 

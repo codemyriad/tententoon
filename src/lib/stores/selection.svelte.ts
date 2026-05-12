@@ -18,7 +18,7 @@
  */
 
 import type { Rect } from '../math/droste';
-import { clampRect } from '../math/droste';
+import { clampRect, clampCrop, fitCropToNest, ensureNestInside } from '../math/droste';
 import { imageState } from './image.svelte';
 import { identityOf, writeSelection, type StoredSelection } from '../persistence';
 
@@ -149,53 +149,6 @@ function clampNestFree(image: { width: number; height: number }, nest: Rect): Re
   const x = Math.max(0, Math.min(image.width - w, nest.x));
   const y = Math.max(0, Math.min(image.height - h, nest.y));
   return { x, y, w, h };
-}
-
-/** Clamp a crop to image bounds. */
-function clampCrop(image: { width: number; height: number }, crop: Rect): Rect {
-  const w = Math.max(1, Math.min(image.width, crop.w));
-  const h = Math.max(1, Math.min(image.height, crop.h));
-  const x = Math.max(0, Math.min(image.width - w, crop.x));
-  const y = Math.max(0, Math.min(image.height - h, crop.y));
-  return { x, y, w, h };
-}
-
-/**
- * Build a crop with the nest's aspect: largest rectangle that fits inside
- * the image, no smaller than the nest itself. Centred on `prev` (when
- * resizing because aspect changed) or on the nest (initial unlock).
- */
-function fitCropToNest(
-  image: { width: number; height: number },
-  nest: Rect,
-  prev: Rect | null
-): Rect {
-  const aspect = nest.w / nest.h;
-  let cw: number;
-  let ch: number;
-  if (image.width / image.height > aspect) {
-    ch = image.height;
-    cw = ch * aspect;
-  } else {
-    cw = image.width;
-    ch = cw / aspect;
-  }
-  if (cw < nest.w || ch < nest.h) {
-    const scale = Math.max(nest.w / cw, nest.h / ch);
-    cw *= scale;
-    ch *= scale;
-  }
-  const anchor = prev
-    ? { x: prev.x + prev.w / 2, y: prev.y + prev.h / 2 }
-    : { x: nest.x + nest.w / 2, y: nest.y + nest.h / 2 };
-  return clampCrop(image, { x: anchor.x - cw / 2, y: anchor.y - ch / 2, w: cw, h: ch });
-}
-
-/** Shift the nest minimally so it lies entirely inside the given crop. */
-function ensureNestInside(nest: Rect, crop: Rect): Rect {
-  const x = Math.max(crop.x, Math.min(crop.x + crop.w - nest.w, nest.x));
-  const y = Math.max(crop.y, Math.min(crop.y + crop.h - nest.h, nest.y));
-  return { ...nest, x, y };
 }
 
 function persist() {
