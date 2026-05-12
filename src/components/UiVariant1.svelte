@@ -18,10 +18,12 @@
   import ToolRail from './ui1/ToolRail.svelte';
   import CanvasStage from './ui1/CanvasStage.svelte';
   import PreviewStage from './ui1/PreviewStage.svelte';
-  import Inspector from './ui1/Inspector.svelte';
   import Timeline from './ui1/Timeline.svelte';
   import DropZone from './ui1/DropZone.svelte';
-  import { ui, doc, playback, commitTranslate } from '../lib/ui1/state.svelte';
+  import {
+    ui, doc, playback, commitTranslate,
+    applyTheme, readThemeOverride
+  } from '../lib/ui1/state.svelte';
   import { phase } from '../lib/ui1/render';
 
   // Plumbing the live canvas + a render-frame fn up to the export menu in
@@ -63,6 +65,18 @@
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
+
+  // Theme: apply the user's override (localStorage) or, absent that, the
+  // OS preference. Listen for OS changes and re-apply when no override
+  // is set so the editor flips with the system at runtime.
+  $effect(() => {
+    applyTheme();
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = () => { if (!readThemeOverride()) applyTheme(); };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  });
 </script>
 
 <div class="ui1-root theme-{ui.theme}">
@@ -83,7 +97,6 @@
         <Timeline />
       </div>
     {/if}
-    <Inspector />
   </div>
 </div>
 

@@ -33,7 +33,11 @@ export const ICON = {
     '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M3 15h18M9 4v16M15 4v16"/>',
   gif: '<rect x="3" y="5" width="18" height="14" rx="2"/>',
   uploadBig:
-    '<path d="M12 16V4"/><path d="M6 10l6-6 6 6"/><path d="M4 20h16"/>'
+    '<path d="M12 16V4"/><path d="M6 10l6-6 6 6"/><path d="M4 20h16"/>',
+  sun:
+    '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M4 12H2"/><path d="M22 12h-2"/><path d="M19.07 4.93l-1.41 1.41"/><path d="M6.34 17.66l-1.41 1.41"/><path d="M19.07 19.07l-1.41-1.41"/><path d="M6.34 6.34L4.93 4.93"/>',
+  moon:
+    '<path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/>'
 } as const;
 
 export type IconName = keyof typeof ICON;

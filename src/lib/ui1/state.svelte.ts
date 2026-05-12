@@ -14,7 +14,6 @@
 import { fitCropToNest, ensureNestInside, type Rect as DrosteRect } from '../math/droste';
 
 export type Tool = 'select' | 'rect' | 'pan';
-export type AspectKind = 'match-image' | 'free' | '1:1' | '16:9';
 export type Direction = 'in' | 'out';
 export type Theme = 'light-neutral' | 'light-warm' | 'dark-warm';
 
@@ -48,13 +47,11 @@ export const doc = $state<{
    * marquee draw, or on image change; nulled when no rect is set.
    */
   crop: Rect | null;
-  aspect: AspectKind;
 }>({
   image: null,
   imageName: '',
   rect: { x: 0, y: 0, w: 0, h: 0 },
-  crop: null,
-  aspect: 'match-image'
+  crop: null
 });
 
 export const playback = $state<{
@@ -166,17 +163,47 @@ export function imageAspect(): number {
   return doc.image ? doc.image.width / doc.image.height : 0;
 }
 
-/** Aspect ratio implied by the current `doc.aspect` chip. */
-export function chipAspect(): number | null {
-  switch (doc.aspect) {
-    case 'match-image':
-      return imageAspect() || null;
-    case '1:1':
-      return 1;
-    case '16:9':
-      return 16 / 9;
-    case 'free':
-    default:
-      return null;
+// --- Theme: system-aware light/dark with manual override ---------------
+//
+// ui.theme drives the .theme-* class on .ui1-root and is what CSS reads.
+// The selection is keyed off the user's manual override (localStorage)
+// when present, otherwise the OS preference. UiVariant1 subscribes to
+// matchMedia and re-applies on OS change when no override is set.
+
+const THEME_STORAGE_KEY = 'ui1-theme';
+
+/** Map a logical pref ('light' | 'dark') to a concrete Theme token. */
+function themeFor(pref: 'light' | 'dark'): Theme {
+  return pref === 'dark' ? 'dark-warm' : 'light-neutral';
+}
+
+/** The user's manual override, or null when following the OS. */
+export function readThemeOverride(): 'light' | 'dark' | null {
+  if (typeof localStorage === 'undefined') return null;
+  const v = localStorage.getItem(THEME_STORAGE_KEY);
+  return v === 'light' || v === 'dark' ? v : null;
+}
+
+/** Current OS-level light/dark preference. Defaults to 'light' off-DOM. */
+export function systemTheme(): 'light' | 'dark' {
+  if (typeof window === 'undefined' || !window.matchMedia) return 'light';
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+/** Compute and apply the effective theme to ui.theme. */
+export function applyTheme(): void {
+  const pref = readThemeOverride() ?? systemTheme();
+  ui.theme = themeFor(pref);
+}
+
+/**
+ * Set or clear the manual override. Passing null returns to following
+ * the OS preference. Either way we apply immediately.
+ */
+export function setThemeOverride(pref: 'light' | 'dark' | null): void {
+  if (typeof localStorage !== 'undefined') {
+    if (pref) localStorage.setItem(THEME_STORAGE_KEY, pref);
+    else localStorage.removeItem(THEME_STORAGE_KEY);
   }
+  applyTheme();
 }

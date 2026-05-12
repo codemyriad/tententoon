@@ -1,6 +1,19 @@
 <script lang="ts">
+  /**
+   * Consolidated playback bar (per the design_handoff_layout_redesign
+   * spec): every animation control lives here so the right inspector
+   * isn't taking up real estate for things the user touches once. From
+   * left to right:
+   *
+   *   [ZOOM in/out segmented] · [▶ time scrubber] · [LENGTH slider]
+   *   · [SPEED 0.5×/1×/2×/4× segmented]
+   *
+   * Groups are visually separated by a 1px left divider so the bar has
+   * rhythm without nested boxes. Disabled state hangs off `enabled`
+   * (= rect has area + image is loaded).
+   */
   import Icon from './Icon.svelte';
-  import { playback } from '../../lib/ui1/state.svelte';
+  import { playback, type Direction } from '../../lib/ui1/state.svelte';
   import { phase } from '../../lib/ui1/render';
 
   let trackEl: HTMLDivElement;
@@ -13,6 +26,9 @@
     if (!enabled) return;
     playback.playing = !playback.playing;
   }
+
+  function setDirection(d: Direction) { if (enabled) playback.direction = d; }
+  function setSpeed(s: 0.5 | 1 | 2 | 4) { if (enabled) playback.speed = s; }
 
   function onTrackDown(e: PointerEvent) {
     if (!enabled) return;
@@ -40,48 +56,155 @@
 
   const progressPct = $derived(`${(playback.t * 100).toFixed(2)}%`);
   const elapsed = $derived(playback.t * playback.loopLength);
+
+  const speeds: (0.5 | 1 | 2 | 4)[] = [0.5, 1, 2, 4];
 </script>
 
-<div class="timeline">
-  <button class="play" class:on={playback.playing} disabled={!enabled} onclick={toggle} title="Play / pause">
-    {#if playback.playing}
-      <Icon name="pause" size={14} />
-    {:else}
-      <Icon name="play" size={14} />
-    {/if}
-  </button>
-  <span class="clock mono">{elapsed.toFixed(1)}s / {playback.loopLength.toFixed(1)}s</span>
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="track"
-    bind:this={trackEl}
-    onpointerdown={onTrackDown}
-    onpointermove={onTrackMove}
-    onpointerup={onTrackUp}
-    onpointercancel={onTrackUp}
-  >
-    <div class="rail"></div>
-    <div class="fill" style="width: {progressPct}"></div>
-    <div class="ticks">
-      {#each Array.from({ length: 11 }) as _, i (i)}
-        <span class="tick" class:major={i % 5 === 0}></span>
+<div class="bbar">
+  <!-- ZOOM (playback direction) -->
+  <div class="bgroup">
+    <span class="micro mono">ZOOM</span>
+    <div class="segmented" role="radiogroup" aria-label="Zoom direction">
+      <button
+        class="seg"
+        class:active={playback.direction === 'in'}
+        disabled={!enabled}
+        onclick={() => setDirection('in')}
+      >In</button>
+      <button
+        class="seg"
+        class:active={playback.direction === 'out'}
+        disabled={!enabled}
+        onclick={() => setDirection('out')}
+      >Out</button>
+    </div>
+  </div>
+
+  <!-- PLAY · time · scrubber -->
+  <div class="bgroup grow play-group">
+    <button class="play" class:on={playback.playing} disabled={!enabled} onclick={toggle} title="Play / pause">
+      {#if playback.playing}
+        <Icon name="pause" size={14} />
+      {:else}
+        <Icon name="play" size={14} />
+      {/if}
+    </button>
+    <span class="clock mono">{elapsed.toFixed(1)}s / {playback.loopLength.toFixed(1)}s</span>
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="track"
+      bind:this={trackEl}
+      onpointerdown={onTrackDown}
+      onpointermove={onTrackMove}
+      onpointerup={onTrackUp}
+      onpointercancel={onTrackUp}
+    >
+      <div class="rail"></div>
+      <div class="fill" style="width: {progressPct}"></div>
+      <div class="ticks">
+        {#each Array.from({ length: 11 }) as _, i (i)}
+          <span class="tick" class:major={i % 5 === 0}></span>
+        {/each}
+      </div>
+      <div class="head" style="left: {progressPct}"></div>
+    </div>
+  </div>
+
+  <!-- LENGTH (loop duration) -->
+  <div class="bgroup">
+    <span class="micro mono">LENGTH</span>
+    <span class="slider-row">
+      <input
+        class="dslider"
+        type="range"
+        min="2"
+        max="30"
+        step="0.5"
+        bind:value={playback.loopLength}
+        disabled={!enabled}
+        aria-label="Loop length"
+      />
+      <span class="value mono">{playback.loopLength.toFixed(1)}s</span>
+    </span>
+  </div>
+
+  <!-- SPEED (rAF multiplier) -->
+  <div class="bgroup">
+    <span class="micro mono">SPEED</span>
+    <div class="segmented" role="radiogroup" aria-label="Playback speed">
+      {#each speeds as s}
+        <button
+          class="seg"
+          class:active={playback.speed === s}
+          disabled={!enabled}
+          onclick={() => setSpeed(s)}
+        >{s}×</button>
       {/each}
     </div>
-    <div class="head" style="left: {progressPct}"></div>
   </div>
-  <span class="chip mono"><Icon name="loop" size={12} />{playback.direction === 'in' ? 'In' : 'Out'}</span>
 </div>
 
 <style>
-  .timeline {
-    padding: 10px 12px;
+  .bbar {
+    padding: 8px 0;
     background: var(--panel);
     border-top: 1px solid var(--border);
     display: flex;
     align-items: center;
-    gap: 12px;
     flex-shrink: 0;
+    min-height: 56px;
   }
+  .bgroup {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 16px;
+    border-left: 1px solid var(--border);
+    height: 48px;
+  }
+  .bgroup:first-child { border-left: 0; }
+  .grow { flex: 1; min-width: 0; }
+  .micro {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .mono { font-family: var(--font-mono); }
+
+  /* Segmented (Zoom, Speed) — pulled from the legacy Inspector,
+     made slightly more compact for the bar. */
+  .segmented {
+    display: inline-flex;
+    padding: 2px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    gap: 2px;
+  }
+  .seg {
+    padding: 4px 10px;
+    font-size: 12px;
+    border-radius: 5px;
+    background: transparent;
+    border: 0;
+    color: var(--muted);
+    font: inherit;
+    cursor: pointer;
+  }
+  .seg:hover:not(:disabled) { color: var(--ink); }
+  .seg.active {
+    background: var(--panel);
+    color: var(--ink);
+    font-weight: 600;
+    box-shadow: var(--shadow);
+  }
+  .seg:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Play button + clock + scrubber */
+  .play-group { gap: 12px; }
   .play {
     width: 32px;
     height: 32px;
@@ -94,6 +217,7 @@
     align-items: center;
     justify-content: center;
     padding: 0;
+    flex-shrink: 0;
   }
   .play.on {
     background: var(--accent);
@@ -106,6 +230,7 @@
     color: var(--muted);
     font-variant-numeric: tabular-nums;
     min-width: 96px;
+    flex-shrink: 0;
   }
   .track {
     flex: 1;
@@ -113,6 +238,7 @@
     height: 18px;
     cursor: pointer;
     touch-action: none;
+    min-width: 80px;
   }
   .rail {
     position: absolute;
@@ -158,16 +284,22 @@
     box-shadow: 0 1px 4px rgba(0,0,0,0.15);
     pointer-events: none;
   }
-  .mono { font-family: var(--font-mono); }
-  .chip {
-    display: inline-flex;
+
+  /* LENGTH slider row */
+  .slider-row {
+    display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
+    gap: 8px;
+  }
+  .dslider {
+    width: 120px;
+    accent-color: var(--accent);
+  }
+  .value {
     font-size: 12px;
     color: var(--ink-2);
+    font-variant-numeric: tabular-nums;
+    min-width: 38px;
+    text-align: right;
   }
 </style>

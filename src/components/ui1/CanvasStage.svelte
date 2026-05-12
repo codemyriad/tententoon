@@ -33,7 +33,6 @@
   import {
     doc,
     ui,
-    chipAspect,
     commitNewRect,
     commitTranslate,
     commitResize,
@@ -330,9 +329,11 @@
   }
 
   function applyMods(rect: Rect, e: PointerEvent): Rect {
-    if (e.shiftKey) {
-      const a = chipAspect();
-      if (a) return snapRectToAspect(rect, a);
+    // Shift snaps to the source image's aspect ratio — the most useful
+    // case of the legacy aspect-chip and the only one we still expose
+    // now that the chip strip is gone.
+    if (e.shiftKey && doc.image) {
+      return snapRectToAspect(rect, doc.image.width / doc.image.height);
     }
     return rect;
   }

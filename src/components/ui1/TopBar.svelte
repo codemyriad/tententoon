@@ -1,7 +1,10 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
   import ExportMenu from './ExportMenu.svelte';
-  import { ui, doc, setImage, commitNewRect } from '../../lib/ui1/state.svelte';
+  import {
+    ui, doc, setImage, commitNewRect,
+    setThemeOverride, readThemeOverride, systemTheme
+  } from '../../lib/ui1/state.svelte';
   import { loadFile } from '../../lib/ui1/file';
 
   type Props = {
@@ -28,6 +31,31 @@
     if (r.ok) setImage(r.image, r.name);
     else ui.exportToast = r.reason;
   }
+
+  // Theme toggle. Three-state cycle: system → light → dark → system.
+  // The button icon reflects the *current effective* theme (sun =
+  // light, moon = dark); a small dot indicates we're tracking the OS.
+  const isDark = $derived(ui.theme === 'dark-warm');
+  const followsSystem = $derived.by(() => {
+    void ui.theme;  // re-read on theme changes so the dot stays in sync
+    return readThemeOverride() === null;
+  });
+  function cycleTheme() {
+    const override = readThemeOverride();
+    if (override === null) {
+      // Currently following OS — pin to the *opposite* of the current
+      // OS pref so the click is visibly effective.
+      setThemeOverride(systemTheme() === 'dark' ? 'light' : 'dark');
+    } else if (override === 'light') {
+      setThemeOverride('dark');
+    } else {
+      setThemeOverride(null);
+    }
+  }
+  function themeTitle(): string {
+    if (followsSystem) return `Theme: auto (${systemTheme()}) — click for light`;
+    return isDark ? 'Theme: dark — click for auto' : 'Theme: light — click for dark';
+  }
 </script>
 
 <header class="top">
@@ -46,6 +74,15 @@
     <span class="file empty">Untitled · no image</span>
   {/if}
   <span class="grow"></span>
+  <button
+    class="btn ghost icon-only theme-toggle"
+    class:auto={followsSystem}
+    onclick={cycleTheme}
+    title={themeTitle()}
+    aria-label="Toggle theme"
+  >
+    <Icon name={isDark ? 'moon' : 'sun'} size={14} />
+  </button>
   <button class="btn ghost" onclick={reset} disabled={!doc.image}>
     <Icon name="reset" size={14} />Reset
   </button>
@@ -128,6 +165,24 @@
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .btn.ghost { background: transparent; border-color: transparent; }
   .btn.ghost:hover:not(:disabled) { background: var(--panel-2); }
+  .btn.icon-only { padding: 5px 7px; gap: 0; }
+  .theme-toggle {
+    position: relative;
+    color: var(--ink-2);
+  }
+  .theme-toggle:hover:not(:disabled) { color: var(--ink); }
+  /* Tiny dot indicates "following the OS" — distinguishes from an
+     explicit override that happens to match the system. */
+  .theme-toggle.auto::after {
+    content: '';
+    position: absolute;
+    bottom: 4px;
+    right: 5px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
   .btn.primary {
     background: var(--accent);
     color: #fff;
