@@ -87,7 +87,15 @@
       <section class="empty"><DropZone /></section>
     {:else}
       <div class="canvas-col">
-        <div class="stages">
+        <!--
+          Both stages stay mounted in every view mode — PreviewStage
+          owns the renderFrame binding the export menu relies on, so
+          unmounting it on `source` would break export-from-source.
+          The `view-*` class hides the inactive stage with display:none,
+          which also short-circuits PreviewStage's render effect via
+          its 0×0 ResizeObserver readout.
+        -->
+        <div class="stages view-{ui.view}">
           <CanvasStage />
           <PreviewStage
             bindCanvas={(c) => (canvas = c)}
@@ -133,11 +141,16 @@
     display: flex;
     min-height: 0;
   }
+  /* View-mode visibility. CanvasStage renders as <section class="stage">,
+     PreviewStage as <section class="preview"> — hide the unwanted one
+     by tag-class. */
+  .stages.view-source :global(.preview) { display: none; }
+  .stages.view-preview :global(.stage) { display: none; }
   /* On narrow viewports the side-by-side split squeezes both panes to
      uselessly thin columns. Stack them vertically instead — image+rect
      on top, spiral preview below. The breakpoint is generous because
      even at 1000 px (devtools open) the side-by-side becomes painful. */
   @media (max-width: 1000px) {
-    .stages { flex-direction: column; }
+    .stages.view-split { flex-direction: column; }
   }
 </style>

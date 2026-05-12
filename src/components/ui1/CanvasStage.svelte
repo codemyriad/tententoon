@@ -149,19 +149,6 @@
     applyZoomAt(zoom * factor, cssX, cssY);
   }
 
-  // Tool-rail zoom commands come in as custom DOM events.
-  $effect(() => {
-    const onZoomCommand = (ev: Event) => {
-      const detail = (ev as CustomEvent<{ kind: 'in' | 'out' | 'fit' }>).detail;
-      if (!detail) return;
-      if (detail.kind === 'in')  applyZoomAt(zoom * 1.25, viewW / 2, viewH / 2);
-      if (detail.kind === 'out') applyZoomAt(zoom / 1.25, viewW / 2, viewH / 2);
-      if (detail.kind === 'fit') applyZoomAt(1, viewW / 2, viewH / 2);
-    };
-    window.addEventListener('tententoon-zoom', onZoomCommand);
-    return () => window.removeEventListener('tententoon-zoom', onZoomCommand);
-  });
-
   // 1. Track viewport size.
   $effect(() => {
     if (!viewport) return;

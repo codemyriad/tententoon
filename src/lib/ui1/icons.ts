@@ -37,7 +37,13 @@ export const ICON = {
   sun:
     '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M4 12H2"/><path d="M22 12h-2"/><path d="M19.07 4.93l-1.41 1.41"/><path d="M6.34 17.66l-1.41 1.41"/><path d="M19.07 19.07l-1.41-1.41"/><path d="M6.34 6.34L4.93 4.93"/>',
   moon:
-    '<path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/>'
+    '<path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/>',
+  viewSplit:
+    '<rect x="3" y="5" width="8" height="14" rx="1"/><rect x="13" y="5" width="8" height="14" rx="1"/>',
+  viewSource:
+    '<rect x="3" y="5" width="18" height="14" rx="1"/><rect x="7" y="9" width="9" height="7" rx="0.5"/>',
+  viewPreview:
+    '<rect x="3" y="3" width="18" height="18" rx="1"/><rect x="7" y="7" width="10" height="10" rx="0.5"/><rect x="10" y="10" width="4" height="4" rx="0.5"/>'
 } as const;
 
 export type IconName = keyof typeof ICON;

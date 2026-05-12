@@ -16,11 +16,22 @@ import { fitCropToNest, ensureNestInside, type Rect as DrosteRect } from '../mat
 export type Tool = 'select' | 'rect' | 'pan';
 export type Direction = 'in' | 'out';
 export type Theme = 'light-neutral' | 'light-warm' | 'dark-warm';
+/**
+ * Which stage(s) are visible.
+ *   split   — image+rect side-by-side with the spiral preview (default).
+ *   source  — only the source image with the rect overlay.
+ *   preview — only the live tententoon spiral.
+ * Both stages stay mounted in all three modes so the preview canvas
+ * (and the export's renderFrame fn it owns) keep their bindings; we
+ * just toggle visibility in CSS.
+ */
+export type ViewMode = 'split' | 'source' | 'preview';
 
 export type Rect = { x: number; y: number; w: number; h: number };
 
 export const ui = $state<{
   tool: Tool;
+  view: ViewMode;
   zoom: 'fit' | number;
   exportMenuOpen: boolean;
   theme: Theme;
@@ -28,6 +39,7 @@ export const ui = $state<{
   exportToast: string | null;
 }>({
   tool: 'rect',
+  view: 'split',
   zoom: 'fit',
   exportMenuOpen: false,
   theme: 'light-neutral',

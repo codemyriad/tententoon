@@ -1,31 +1,40 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
-  import { ui, type Tool } from '../../lib/ui1/state.svelte';
+  import { ui, type ViewMode } from '../../lib/ui1/state.svelte';
 
-  function set(tool: Tool) {
-    ui.tool = tool;
+  function setView(view: ViewMode) {
+    ui.view = view;
   }
-  const dispatchZoom = (kind: 'in' | 'out' | 'fit') => {
-    window.dispatchEvent(new CustomEvent('tententoon-zoom', { detail: { kind } }));
-  };
-  const zoomIn = () => dispatchZoom('in');
-  const zoomOut = () => dispatchZoom('out');
 </script>
 
-<nav class="rail" aria-label="Tools">
-  <button class="tool" class:active={ui.tool === 'select'} title="Select" onclick={() => set('select')}>
-    <Icon name="cursor" />
+<nav class="rail" aria-label="View">
+  <button
+    class="tool"
+    class:active={ui.view === 'split'}
+    title="Side-by-side view"
+    aria-label="Side-by-side view"
+    onclick={() => setView('split')}
+  >
+    <Icon name="viewSplit" />
   </button>
-  <button class="tool" class:active={ui.tool === 'rect'} title="Rectangle" onclick={() => set('rect')}>
-    <Icon name="rect" />
+  <button
+    class="tool"
+    class:active={ui.view === 'source'}
+    title="Image only (with the selection rectangle)"
+    aria-label="Image only"
+    onclick={() => setView('source')}
+  >
+    <Icon name="viewSource" />
   </button>
-  <button class="tool" class:active={ui.tool === 'pan'} title="Pan" onclick={() => set('pan')}>
-    <Icon name="hand" />
+  <button
+    class="tool"
+    class:active={ui.view === 'preview'}
+    title="Tententoon only (the spiral preview)"
+    aria-label="Tententoon only"
+    onclick={() => setView('preview')}
+  >
+    <Icon name="viewPreview" />
   </button>
-  <div class="spacer"></div>
-  <div class="divider"></div>
-  <button class="tool mini" title="Zoom in" onclick={zoomIn}><Icon name="zoomIn" size={14} /></button>
-  <button class="tool mini" title="Zoom out" onclick={zoomOut}><Icon name="zoomOut" size={14} /></button>
 </nav>
 
 <style>
@@ -59,7 +68,4 @@
     color: #fff;
     border-color: var(--accent);
   }
-  .tool.mini { width: 28px; height: 28px; }
-  .spacer { flex: 1; }
-  .divider { width: 24px; height: 1px; background: var(--border); margin: 4px 0; }
 </style>
