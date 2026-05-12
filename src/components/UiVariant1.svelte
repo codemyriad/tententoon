@@ -134,6 +134,12 @@
     align-items: center;
     justify-content: center;
     padding: 32px;
+    overflow-y: auto;
+  }
+  /* Phones: 32 px outer padding crowds a 360–390 viewport. Tighten and
+     let the drop card hug the available width. */
+  @media (max-width: 720px) {
+    .empty { padding: 16px; }
   }
   .canvas-col {
     flex: 1;

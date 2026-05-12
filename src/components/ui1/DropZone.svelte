@@ -93,7 +93,7 @@
 
 <style>
   .drop {
-    width: 78%;
+    width: 100%;
     max-width: 640px;
     aspect-ratio: 16 / 10;
     border: 2px dashed var(--border-strong);
@@ -122,10 +122,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
   }
-  .h { font-size: 22px; font-weight: 600; color: var(--ink); }
-  .s { font-size: 14px; color: var(--muted); text-align: center; }
-  .actions { display: flex; gap: 8px; margin-top: 6px; }
+  .h { font-size: 22px; font-weight: 600; color: var(--ink); text-align: center; }
+  .s { font-size: 14px; color: var(--muted); text-align: center; max-width: 36ch; }
+  .actions { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; justify-content: center; }
   .btn {
     display: inline-flex;
     align-items: center;
@@ -139,6 +140,10 @@
     border: 1px solid var(--border);
     background: var(--panel);
     color: var(--ink);
+    /* Without nowrap the button text would break inside a constrained
+       flex parent (e.g. "Choose / file" two-line label). */
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .btn:hover { background: var(--panel-2); }
   .btn.primary {
@@ -147,7 +152,23 @@
     border-color: var(--accent);
   }
   .btn.ghost { background: transparent; border-color: transparent; }
-  .footnote { font-size: 11px; color: var(--muted); margin-top: 6px; font-family: var(--font-mono); }
+  .footnote { font-size: 11px; color: var(--muted); margin-top: 6px; font-family: var(--font-mono); text-align: center; }
   .error { font-size: 11px; color: var(--accent); margin-top: 4px; font-family: var(--font-mono); }
   .mono { font-family: var(--font-mono); }
+
+  /* Narrow viewports: the 16:10 aspect makes a 320-wide card 200 tall,
+     too short for icon + heading + body + actions + footnote. Drop the
+     aspect lock and let content size the card; trim the heading and
+     section paddings so the whole zone fits in a phone's middle band. */
+  @media (max-width: 720px) {
+    .drop {
+      aspect-ratio: auto;
+      padding: 20px 16px;
+      gap: 12px;
+      margin: 16px auto;
+    }
+    .h { font-size: 18px; }
+    .s { font-size: 13px; max-width: 28ch; }
+    .bigicon { width: 44px; height: 44px; border-radius: 11px; }
+  }
 </style>
