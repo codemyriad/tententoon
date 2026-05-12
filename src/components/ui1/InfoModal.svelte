@@ -48,6 +48,13 @@
       </p>
 
       <p>
+        In 2026, <strong>Grant Sanderson</strong> (of <em>3Blue1Brown</em>)
+        published a beautifully animated video walking through the paper.
+        Highly recommended &mdash; it is the clearest tour of the math
+        behind this toy.
+      </p>
+
+      <p>
         This editor is a small interactive take on that idea: pick a
         rectangle inside any image and watch it spiral into itself forever.
         <span class="aside">(Complex numbers are fun. So are logarithms.)</span>
@@ -69,7 +76,7 @@
         </li>
         <li>
           <a href="https://www.youtube.com/watch?v=ldxFjLJ3rVY" target="_blank" rel="noopener noreferrer">
-            <span class="lt">YouTube &mdash; video walkthrough of the paper</span>
+            <span class="lt">3Blue1Brown &mdash; animated walkthrough of the paper (2026)</span>
             <Icon name="external" size={12} />
           </a>
         </li>
