@@ -45,19 +45,72 @@ export class CpuEscherZoomRenderer implements EscherZoomRenderer {
   }
 
   render(input: EscherZoomInput): void {
-    if (!this.canvas || !this.ctx2d) return;
-    const { pixels, ctx: droste, R0, W, H, scale, t } = input;
+    const c = this.prepare(input);
+    if (!c) return;
+    const expTShift = Math.exp(input.t * input.ctx.logS);
+    this.renderRows(input, c, expTShift, 0, input.H);
+    this.ctx2d!.putImageData(c.imageData, 0, 0);
+  }
 
+  /**
+   * Progressive variant for one-shot exports: renders the image in
+   * `rowChunk`-row stripes, yielding to the event loop between stripes so
+   * the UI can paint a progress indicator and stay responsive. The final
+   * putImageData lands once at the end — partial commits aren't worth the
+   * extra copy when nobody's watching the export canvas live.
+   */
+  async renderProgressive(
+    input: EscherZoomInput,
+    opts: {
+      rowChunk?: number;
+      onProgress?: (fraction: number) => void;
+      signal?: { cancelled: boolean };
+    } = {}
+  ): Promise<void> {
+    // Yield before the cache build so the caller's progress modal can
+    // paint — buildCache is itself a W×H loop that can take ~100ms and
+    // would otherwise eat the first frame.
+    opts.onProgress?.(0);
+    await new Promise<void>((r) => setTimeout(r, 0));
+    if (opts.signal?.cancelled) throw new Error('cancelled');
+    const c = this.prepare(input);
+    if (!c) return;
+    const expTShift = Math.exp(input.t * input.ctx.logS);
+    const rowChunk = Math.max(1, opts.rowChunk ?? 32);
+    const H = input.H;
+    for (let yStart = 0; yStart < H; yStart += rowChunk) {
+      if (opts.signal?.cancelled) throw new Error('cancelled');
+      const yEnd = Math.min(yStart + rowChunk, H);
+      this.renderRows(input, c, expTShift, yStart, yEnd);
+      opts.onProgress?.(yEnd / H);
+      if (yEnd < H) await new Promise<void>((r) => setTimeout(r, 0));
+    }
+    this.ctx2d!.putImageData(c.imageData, 0, 0);
+  }
+
+  /** Shared setup: size the canvas, build/reuse the cache. Returns null
+   *  when the renderer isn't bound (init not called yet / disposed). */
+  private prepare(input: EscherZoomInput): Cache | null {
+    if (!this.canvas || !this.ctx2d) return null;
+    const { ctx: droste, R0, W, H, scale } = input;
     if (this.canvas.width !== W) this.canvas.width = W;
     if (this.canvas.height !== H) this.canvas.height = H;
-
     const key = `${W}x${H}@${scale}|${droste.cx},${droste.cy}|${droste.logS}|${droste.rMax}|${R0}|${droste.cropX},${droste.cropY}|${droste.sampleScale}`;
     if (this.cacheKey !== key || !this.cache) {
       this.cache = this.buildCache(input);
       this.cacheKey = key;
     }
-    const c = this.cache;
-    const expTShift = Math.exp(t * droste.logS);
+    return this.cache;
+  }
+
+  private renderRows(
+    input: EscherZoomInput,
+    c: Cache,
+    expTShift: number,
+    yStart: number,
+    yEnd: number
+  ): void {
+    const { pixels, ctx: droste, W, scale } = input;
     const { cx, cy } = droste;
     const data = c.imageData.data;
     const rgba: [number, number, number, number] = [0, 0, 0, 0];
@@ -78,7 +131,7 @@ export class CpuEscherZoomRenderer implements EscherZoomRenderer {
       return sampleDroste(pixels, droste, sx, sy, rgba);
     };
 
-    for (let py = 0; py < H; py++) {
+    for (let py = yStart; py < yEnd; py++) {
       for (let px = 0; px < W; px++) {
         const i = py * W + px;
         const idx = i << 2;
@@ -115,7 +168,6 @@ export class CpuEscherZoomRenderer implements EscherZoomRenderer {
         }
       }
     }
-    this.ctx2d.putImageData(c.imageData, 0, 0);
   }
 
   dispose(): void {

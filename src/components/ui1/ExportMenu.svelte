@@ -15,20 +15,32 @@
   let { renderFrame }: Props = $props();
 
   let busy = $state(false);
-  let videoProgress = $state<number | null>(null); // 0..1; null = idle
-  // Cancellation flag handed to exportVideo so it can bail on next frame.
-  let videoCancel: { cancelled: boolean } | null = null;
+  // One progress channel for both export kinds — same modal, different labels.
+  // null = idle.
+  type ProgressKind = 'image' | 'video';
+  let progress = $state<{ kind: ProgressKind; fraction: number } | null>(null);
+  // Cancellation flag handed to whichever export is running.
+  let cancelFlag: { cancelled: boolean } | null = null;
 
   async function doPng() {
     if (!doc.image || busy) return;
     busy = true;
     ui.exportMenuOpen = false;
+    progress = { kind: 'image', fraction: 0 };
+    cancelFlag = { cancelled: false };
     try {
-      await exportPng(doc.image, doc.rect, basename('.png'));
+      await exportPng(doc.image, doc.rect, {
+        filename: basename('.png'),
+        signal: cancelFlag,
+        onProgress: (f) => { progress = { kind: 'image', fraction: f }; }
+      });
       ui.exportToast = 'Image saved.';
     } catch (e) {
-      ui.exportToast = `Image export failed: ${e instanceof Error ? e.message : String(e)}`;
+      const msg = e instanceof Error ? e.message : String(e);
+      ui.exportToast = msg === 'cancelled' ? 'Export cancelled.' : `Image export failed: ${msg}`;
     } finally {
+      progress = null;
+      cancelFlag = null;
       busy = false;
       hideToastAfter();
     }
@@ -38,8 +50,8 @@
     if (!doc.image || busy) return;
     busy = true;
     ui.exportMenuOpen = false;
-    videoProgress = 0;
-    videoCancel = { cancelled: false };
+    progress = { kind: 'video', fraction: 0 };
+    cancelFlag = { cancelled: false };
     try {
       await exportVideo({
         imageWidth: doc.image.width,
@@ -47,23 +59,23 @@
         loopSeconds: playback.loopLength,
         renderFrame,
         filenameBase: basename(''),
-        signal: videoCancel,
-        onProgress: (p) => { videoProgress = p.fraction; }
+        signal: cancelFlag,
+        onProgress: (p) => { progress = { kind: 'video', fraction: p.fraction }; }
       });
       ui.exportToast = 'Video saved.';
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       ui.exportToast = msg === 'cancelled' ? 'Export cancelled.' : `Video export failed: ${msg}`;
     } finally {
-      videoProgress = null;
-      videoCancel = null;
+      progress = null;
+      cancelFlag = null;
       busy = false;
       hideToastAfter();
     }
   }
 
-  function cancelVideo() {
-    if (videoCancel) videoCancel.cancelled = true;
+  function cancelExport() {
+    if (cancelFlag) cancelFlag.cancelled = true;
   }
 
   function basename(ext: string): string {
@@ -95,7 +107,7 @@
       <span class="ic"><Icon name="image" size={14} /></span>
       <span class="text">
         <span class="t">Image</span>
-        <span class="s">A picture of this view · {doc.image?.width ?? 0}×{doc.image?.height ?? 0}</span>
+        <span class="s">A tententoon of your picture · {doc.image?.width ?? 0}×{doc.image?.height ?? 0}</span>
       </span>
       <span class="dl"><Icon name="download" size={14} /></span>
     </button>
@@ -103,7 +115,7 @@
       <span class="ic"><Icon name="film" size={14} /></span>
       <span class="text">
         <span class="t">Video</span>
-        <span class="s">A {playback.loopLength.toFixed(0)}-second looping clip · keeps recording while you explore</span>
+        <span class="s">A looping zoom of a tententoon of your picture · {playback.loopLength.toFixed(0)}s</span>
       </span>
       <span class="dl"><Icon name="download" size={14} /></span>
     </button>
@@ -115,24 +127,27 @@
 {/if}
 
 <!--
-  Modal overlay during a video export. Blocks UI clicks (covers the page)
-  so the user can't drift attention into something they expect to affect
-  the output; shows live progress so they know it's working; offers a
-  Cancel button. The actual rendering is happening off-screen, so user
-  panics don't corrupt anything either way — this is purely a clarity
-  affordance.
+  Modal overlay during an export. Blocks UI clicks (covers the page) so
+  the user can't drift attention into something they expect to affect the
+  output; shows live progress so they know it's working; offers a Cancel
+  button. The actual rendering is happening off-screen, so user panics
+  don't corrupt anything either way — this is purely a clarity affordance.
 -->
-{#if videoProgress !== null}
-  <div class="recording-mask" role="dialog" aria-modal="true" aria-label="Exporting video">
+{#if progress !== null}
+  <div class="recording-mask" role="dialog" aria-modal="true" aria-label="Exporting {progress.kind}">
     <div class="recording-card">
-      <div class="rec-title">Exporting video…</div>
-      <div class="rec-bar" role="progressbar" aria-valuenow={Math.round(videoProgress * 100)} aria-valuemin="0" aria-valuemax="100">
-        <div class="rec-bar-fill" style:width="{(videoProgress * 100).toFixed(1)}%"></div>
+      <div class="rec-title">Exporting {progress.kind}…</div>
+      <div class="rec-bar" role="progressbar" aria-valuenow={Math.round(progress.fraction * 100)} aria-valuemin="0" aria-valuemax="100">
+        <div class="rec-bar-fill" style:width="{(progress.fraction * 100).toFixed(1)}%"></div>
       </div>
       <div class="rec-text mono">
-        {(videoProgress * 100).toFixed(0)}% · {(videoProgress * playback.loopLength).toFixed(1)}s / {playback.loopLength.toFixed(1)}s
+        {#if progress.kind === 'video'}
+          {(progress.fraction * 100).toFixed(0)}% · {(progress.fraction * playback.loopLength).toFixed(1)}s / {playback.loopLength.toFixed(1)}s
+        {:else}
+          {(progress.fraction * 100).toFixed(0)}%
+        {/if}
       </div>
-      <button class="rec-cancel" onclick={cancelVideo}>Cancel</button>
+      <button class="rec-cancel" onclick={cancelExport}>Cancel</button>
     </div>
   </div>
 {/if}
