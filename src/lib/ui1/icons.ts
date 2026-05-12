@@ -43,7 +43,9 @@ export const ICON = {
   viewSource:
     '<rect x="3" y="5" width="18" height="14" rx="1"/><rect x="7" y="9" width="9" height="7" rx="0.5"/>',
   viewPreview:
-    '<rect x="3" y="3" width="18" height="18" rx="1"/><rect x="7" y="7" width="10" height="10" rx="0.5"/><rect x="10" y="10" width="4" height="4" rx="0.5"/>'
+    '<rect x="3" y="3" width="18" height="18" rx="1"/><rect x="7" y="7" width="10" height="10" rx="0.5"/><rect x="10" y="10" width="4" height="4" rx="0.5"/>',
+  share:
+    '<path d="M12 16V4"/><path d="M8 8l4-4 4 4"/><path d="M20 12v8a2 2 0 01-2 2H6a2 2 0 01-2-2v-8"/>'
 } as const;
 
 export type IconName = keyof typeof ICON;

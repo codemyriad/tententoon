@@ -1,6 +1,12 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
+  import ShareMenu from './ShareMenu.svelte';
   import { ui, type ViewMode } from '../../lib/ui1/state.svelte';
+
+  type Props = {
+    renderFrame: (off: HTMLCanvasElement, t: number) => Promise<void> | void;
+  };
+  let { renderFrame }: Props = $props();
 
   function setView(view: ViewMode) {
     ui.view = view;
@@ -35,6 +41,9 @@
   >
     <Icon name="viewPreview" />
   </button>
+  <div class="spacer"></div>
+  <!-- Self-hides on browsers without navigator.canShare for files. -->
+  <ShareMenu {renderFrame} />
 </nav>
 
 <style>
@@ -67,5 +76,13 @@
     background: var(--accent);
     color: #fff;
     border-color: var(--accent);
+  }
+  .spacer { flex: 1; }
+  /* Touch viewports: bump the hit target to 40 px and widen the rail
+     to match. 36 px is too small for thumbs and Apple HIG asks for
+     more anyway. */
+  @media (pointer: coarse) {
+    .rail { width: 56px; padding: 8px 6px; }
+    .tool { width: 44px; height: 44px; }
   }
 </style>

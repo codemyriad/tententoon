@@ -83,11 +83,11 @@
   >
     <Icon name={isDark ? 'moon' : 'sun'} size={14} />
   </button>
-  <button class="btn ghost" onclick={reset} disabled={!doc.image}>
-    <Icon name="reset" size={14} />Reset
+  <button class="btn ghost compactable" onclick={reset} disabled={!doc.image} title="Reset rectangle" aria-label="Reset rectangle">
+    <Icon name="reset" size={14} /><span class="lbl">Reset</span>
   </button>
-  <button class="btn" onclick={replace}>
-    <Icon name="upload" size={14} />Replace
+  <button class="btn compactable" onclick={replace} title="Replace image" aria-label="Replace image">
+    <Icon name="upload" size={14} /><span class="lbl">Replace</span>
   </button>
   <input
     bind:this={input}
@@ -102,7 +102,7 @@
       onclick={() => (ui.exportMenuOpen = !ui.exportMenuOpen)}
       disabled={!doc.image}
     >
-      <Icon name="download" size={14} />Export
+      <Icon name="download" size={14} /><span class="lbl">Export</span>
       <span class="caret"><Icon name="caret" size={12} /></span>
     </button>
     <ExportMenu {canvas} {renderFrame} />
@@ -195,4 +195,44 @@
   }
   .caret { opacity: 0.7; margin-left: 2px; display: inline-flex; }
   .exp-wrap { position: relative; }
+
+  /* Narrow viewports: collapse to icon-only buttons so the four
+     header actions stop falling off the right edge. Phone-portrait
+     390 px viewport fits the brand chip, file name (truncated),
+     four icon buttons, and Export (label kept — it's the primary
+     action and "download" icon alone reads ambiguous). */
+  @media (max-width: 720px) {
+    .top { gap: 6px; padding: 8px 10px; }
+    .div { display: none; }
+    .dim { display: none; }
+    .fname { max-width: 140px; }
+    .compactable .lbl { display: none; }
+    .compactable { padding: 5px 7px; gap: 0; }
+  }
+  /* Phone-portrait ≤ 420 px: drop the wordmark too — the logo alone
+     is enough chrome, and we need every pixel for the action row. */
+  @media (max-width: 420px) {
+    .name { display: none; }
+    .fname { max-width: 110px; }
+  }
+  /* Below ~390 px the four actions + the file chip can't co-exist on
+     one row even at minimum widths. Wrap to two rows: brand and file
+     on top, actions below, separated by a zero-height .grow as the
+     row break. Header grows ~36 px taller, all controls reachable. */
+  @media (max-width: 400px) {
+    .top {
+      flex-wrap: wrap;
+      align-items: center;
+      padding: 6px 8px;
+    }
+    .grow { flex-basis: 100%; height: 0; }
+    .fname { max-width: 200px; }
+  }
+  /* Bigger touch targets on coarse pointers (phones / tablets).
+     Apple HIG asks for 44; we land on 40 because the header bar is
+     finite and 44 forces a taller bar that eats into the canvas. */
+  @media (pointer: coarse) {
+    .btn { padding: 8px 12px; }
+    .btn.icon-only { padding: 8px 10px; }
+  }
 </style>

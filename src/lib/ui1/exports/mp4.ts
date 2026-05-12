@@ -18,6 +18,8 @@
  *   3. video/webm              (fallback)
  */
 
+import { drawWatermark, shareBlob } from './share';
+
 const CANDIDATES = [
   'video/mp4;codecs=avc1',
   'video/webm;codecs=vp9',
@@ -38,6 +40,10 @@ export type VideoExportInputs = {
   filenameBase?: string;
   /** External cancellation. Throws if true on the next tick. */
   signal?: { cancelled: boolean };
+  /** When set, stamped bottom-right of every frame after renderFrame draws. */
+  watermark?: string;
+  /** Default 'download'. 'share' hands the blob to navigator.share. */
+  output?: 'download' | 'share';
 };
 
 export function pickMimeType(): { type: string; ext: VideoExtension } | null {
@@ -57,7 +63,9 @@ export async function exportVideo({
   renderFrame,
   onProgress,
   filenameBase = 'tententoon',
-  signal
+  signal,
+  watermark,
+  output = 'download'
 }: VideoExportInputs): Promise<{ ext: VideoExtension }> {
   const mime = pickMimeType();
   if (!mime) throw new Error('No supported video MIME type for MediaRecorder.');
@@ -112,6 +120,7 @@ export async function exportVideo({
         const t = fraction % 1; // wraps at the end; we stop right after
         try {
           await renderFrame(canvas, t);
+          if (watermark) drawWatermark(canvas, watermark);
         } catch (err) {
           cancelAnimationFrame(raf);
           reject(err);
@@ -129,7 +138,12 @@ export async function exportVideo({
 
     rec.stop();
     const blob = await stopped;
-    downloadBlob(blob, `${filenameBase}.${mime.ext}`);
+    const filename = `${filenameBase}.${mime.ext}`;
+    if (output === 'share') {
+      await shareBlob(blob, filename, mime.type.split(';')[0]);
+    } else {
+      downloadBlob(blob, filename);
+    }
     onProgress?.({ fraction: 1, done: true });
     return { ext: mime.ext };
   } finally {

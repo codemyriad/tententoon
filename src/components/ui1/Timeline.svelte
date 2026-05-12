@@ -146,24 +146,44 @@
 
 <style>
   .bbar {
-    padding: 8px 0;
+    padding: 6px 0;
     background: var(--panel);
     border-top: 1px solid var(--border);
     display: flex;
     align-items: center;
     flex-shrink: 0;
+    flex-wrap: wrap;
+    row-gap: 4px;
     min-height: 56px;
   }
   .bgroup {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 0 16px;
+    padding: 0 12px;
     border-left: 1px solid var(--border);
-    height: 48px;
+    height: 44px;
   }
   .bgroup:first-child { border-left: 0; }
-  .grow { flex: 1; min-width: 0; }
+  .grow { flex: 1; min-width: 220px; }
+
+  /* Narrow viewports: drop the borders between wrapped groups and
+     hide the micro labels so the bar packs into two rows — play +
+     scrubber on top (full width), ZOOM / LENGTH / SPEED packed below.
+     The play row stays first because order: -1 on .grow pulls it
+     ahead of its siblings without changing markup. */
+  @media (max-width: 720px) {
+    .bgroup {
+      border-left: 0;
+      padding: 0 6px;
+      gap: 6px;
+      height: 36px;
+    }
+    .grow { flex-basis: 100%; min-width: 0; order: -1; height: 40px; }
+    .micro { display: none; }
+    .dslider { width: 88px; }
+    .seg { padding: 3px 8px; font-size: 11px; }
+  }
   .micro {
     font-size: 10px;
     font-weight: 600;
@@ -202,6 +222,10 @@
     box-shadow: var(--shadow);
   }
   .seg:disabled { opacity: 0.5; cursor: not-allowed; }
+  @media (pointer: coarse) {
+    .seg { padding: 8px 12px; font-size: 13px; }
+    .play { width: 40px; height: 40px; }
+  }
 
   /* Play button + clock + scrubber */
   .play-group { gap: 12px; }

@@ -82,7 +82,7 @@
 <div class="ui1-root theme-{ui.theme}">
   <TopBar {canvas} {renderFrame} />
   <div class="body">
-    <ToolRail />
+    <ToolRail {renderFrame} />
     {#if phase() === 'empty'}
       <section class="empty"><DropZone /></section>
     {:else}
@@ -112,7 +112,12 @@
   .ui1-root {
     display: flex;
     flex-direction: column;
+    /* 100vh on iOS Safari includes the dynamic URL bar — the bottom
+       playback strip slides below the visible viewport. dvh sizes to
+       what's actually on screen and re-flows when the URL bar shows
+       or hides. Fallback for older browsers stays at vh. */
     height: 100vh;
+    height: 100dvh;
     background: var(--bg);
     color: var(--ink);
     font-family: 'Inter', system-ui, sans-serif;
@@ -146,11 +151,17 @@
      by tag-class. */
   .stages.view-source :global(.preview) { display: none; }
   .stages.view-preview :global(.stage) { display: none; }
-  /* On narrow viewports the side-by-side split squeezes both panes to
-     uselessly thin columns. Stack them vertically instead — image+rect
-     on top, spiral preview below. The breakpoint is generous because
-     even at 1000 px (devtools open) the side-by-side becomes painful. */
-  @media (max-width: 1000px) {
+  /* Stack the split view vertically only when the viewport is *both*
+     narrow AND portrait — phones in landscape have horizontal room
+     and side-by-side reads fine there. Stacking on a 844×390 phone
+     landscape would squeeze each stage to ~120 px tall, which is
+     unusable for cropping. */
+  @media (orientation: portrait) and (max-width: 900px) {
+    .stages.view-split { flex-direction: column; }
+  }
+  /* Pure-narrow fallback for very small windows (devtools-open
+     desktop) where orientation may not be reported reliably. */
+  @media (max-width: 640px) {
     .stages.view-split { flex-direction: column; }
   }
 </style>

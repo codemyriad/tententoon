@@ -6,6 +6,7 @@
 
 import { CpuEscherZoomRenderer } from '../../render/escher-zoom/cpu';
 import { buildRenderInputs, extractPixels } from '../render';
+import { drawWatermark, shareBlob } from './share';
 
 export type Rect = { x: number; y: number; w: number; h: number };
 
@@ -14,6 +15,10 @@ export type PngExportOptions = {
   /** Reported as 0..1 across the pixel render; encoding/download share the tail. */
   onProgress?: (fraction: number) => void;
   signal?: { cancelled: boolean };
+  /** When set, stamped bottom-right after the spiral renders. */
+  watermark?: string;
+  /** Default 'download'. 'share' hands the blob to navigator.share. */
+  output?: 'download' | 'share';
 };
 
 export async function exportPng(
@@ -22,7 +27,13 @@ export async function exportPng(
   crop: Rect,
   opts: PngExportOptions = {}
 ): Promise<void> {
-  const { filename = 'tententoon.png', onProgress, signal } = opts;
+  const {
+    filename = 'tententoon.png',
+    onProgress,
+    signal,
+    watermark,
+    output = 'download'
+  } = opts;
   if (rect.w <= 0 || rect.h <= 0 || crop.w <= 0 || crop.h <= 0) {
     throw new Error('No valid rect');
   }
@@ -51,10 +62,16 @@ export async function exportPng(
 
   if (signal?.cancelled) throw new Error('cancelled');
 
+  if (watermark) drawWatermark(canvas, watermark);
+
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
   if (!blob) throw new Error('toBlob returned null');
   onProgress?.(1);
-  downloadBlob(blob, filename);
+  if (output === 'share') {
+    await shareBlob(blob, filename, 'image/png');
+  } else {
+    downloadBlob(blob, filename);
+  }
 }
 
 function downloadBlob(blob: Blob, filename: string): void {
