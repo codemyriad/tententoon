@@ -116,23 +116,46 @@
 
   /**
    * Render one frame to the given off-screen canvas at raw progress t
-   * (0..1). Direction handling lives here, so callers (video export)
-   * stay agnostic. CPU tier so the renderer plays well with arbitrary
-   * canvases (no transferControlToOffscreen entanglement).
+   * (0..1). Used by the video export.
+   *
+   * Two non-obvious things:
+   *
+   *  - webgl2-main tier (not cpu-main). The CPU renderer is ~100–500 ms
+   *    per frame on a non-trivial image; a wall-clock-paced 10 s loop
+   *    barely got six frames in before timing out. GPU on the main
+   *    thread is ~5 ms per frame and lets the rAF loop run at 60 Hz.
+   *    The factory still falls back to CPU if WebGL2 is unavailable.
+   *
+   *  - Renderer is cached per canvas across frames. Re-initialising on
+   *    every frame would compile shaders and re-upload the texture each
+   *    time. We keep the same renderer until the export canvas changes
+   *    (each export creates a fresh hidden canvas) and dispose then.
+   *    Last renderer disposes on component unmount.
    */
+  let exportRenderer: ReturnType<typeof createEscherZoomRenderer> | null = null;
+  let exportCanvasRef: HTMLCanvasElement | null = null;
+
   async function renderFrameToOffscreen(off: HTMLCanvasElement, t: number): Promise<void> {
     if (!doc.image || !pixels) return;
-    const r = createEscherZoomRenderer({ forceTier: 'cpu-main' });
-    await r.init(off);
-    try {
-      const u = buildRenderInputs(doc.image, pixels, doc.rect, off.width, off.height);
-      if (!u) return;
-      const effT = playback.direction === 'in' ? t : 1 - t;
-      r.render({ ...u, t: effT });
-    } finally {
-      r.dispose();
+    if (exportCanvasRef !== off) {
+      exportRenderer?.dispose();
+      exportRenderer = createEscherZoomRenderer({ forceTier: 'webgl2-main' });
+      await exportRenderer.init(off);
+      exportCanvasRef = off;
     }
+    const u = buildRenderInputs(doc.image, pixels, doc.rect, off.width, off.height);
+    if (!u || !exportRenderer) return;
+    const effT = playback.direction === 'in' ? t : 1 - t;
+    exportRenderer.render({ ...u, t: effT });
   }
+
+  $effect(() => {
+    return () => {
+      exportRenderer?.dispose();
+      exportRenderer = null;
+      exportCanvasRef = null;
+    };
+  });
 </script>
 
 <section class="preview">
