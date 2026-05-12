@@ -1,14 +1,18 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
-  import { ui, stageController, type Tool } from '../../lib/ui1/state.svelte';
+  import { ui, type Tool } from '../../lib/ui1/state.svelte';
 
   function set(tool: Tool) {
     ui.tool = tool;
   }
-  // Buttons go through the CanvasStage's stage controller — same code path
-  // as wheel/pinch, anchored on the viewport centre.
-  const zoomIn = () => stageController.zoomIn();
-  const zoomOut = () => stageController.zoomOut();
+  // Dispatch a custom DOM event for the CanvasStage to pick up. Using a
+  // plain browser event sidesteps any Svelte 5 cross-component reactivity
+  // edge cases (the earlier $state-callback approach was silently no-op'd).
+  const dispatchZoom = (kind: 'in' | 'out' | 'fit') => {
+    window.dispatchEvent(new CustomEvent('tententoon-zoom', { detail: { kind } }));
+  };
+  const zoomIn = () => dispatchZoom('in');
+  const zoomOut = () => dispatchZoom('out');
 </script>
 
 <nav class="rail" aria-label="Tools">

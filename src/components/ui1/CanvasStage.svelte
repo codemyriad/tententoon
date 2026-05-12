@@ -34,7 +34,6 @@
     doc,
     ui,
     chipAspect,
-    stageController,
     type Rect
   } from '../../lib/ui1/state.svelte';
   import { snapRectToAspect, phase } from '../../lib/ui1/render';
@@ -138,33 +137,34 @@
     ui.zoom = z <= 1 ? 'fit' : z;
   }
 
-  // Expose tool-rail / keyboard actions. They anchor on the viewport
-  // centre — same applyZoomAt code path as wheel/pinch.
-  $effect(() => {
-    stageController.zoomIn = () => applyZoomAt(currentZoom() * 1.25, viewW / 2, viewH / 2);
-    stageController.zoomOut = () => applyZoomAt(currentZoom() / 1.25, viewW / 2, viewH / 2);
-    stageController.zoomFit = () => applyZoomAt(1, viewW / 2, viewH / 2);
-  });
 
-  // Wheel zoom (desktop). passive: false so we can preventDefault and stop
-  // the page from scrolling under us. We read doc.image directly (not the
-  // `ready` $derived) because $derived access from non-reactive callbacks
-  // can be flaky depending on Svelte 5 runtime tracking state.
+  // Wheel zoom (desktop). Attached via Svelte's onwheel attribute in the
+  // markup below, not via addEventListener — the latter was apparently
+  // failing to attach (HUD never updated on scroll). Element-scoped
+  // wheel listeners default to passive: false, so preventDefault works.
+  function onWheel(e: WheelEvent): void {
+    if (!doc.image || !viewport) return;
+    e.preventDefault();
+    const r = viewport.getBoundingClientRect();
+    const cssX = e.clientX - r.left;
+    const cssY = e.clientY - r.top;
+    const factor = Math.exp(-e.deltaY * 0.0025);
+    applyZoomAt(currentZoom() * factor, cssX, cssY);
+  }
+
+  // Listen for tool-rail zoom commands via custom events. Replaces the
+  // stageController $state callback indirection, which was failing to
+  // route through to applyZoomAt (HUD never updated when buttons clicked).
   $effect(() => {
-    if (!viewport) return;
-    const vp = viewport;
-    const onWheel = (e: WheelEvent) => {
-      if (!doc.image) return;
-      e.preventDefault();
-      const r = vp.getBoundingClientRect();
-      const cssX = e.clientX - r.left;
-      const cssY = e.clientY - r.top;
-      // Smooth multiplicative zoom factor. deltaMode-aware via Math.exp.
-      const factor = Math.exp(-e.deltaY * 0.0025);
-      applyZoomAt(currentZoom() * factor, cssX, cssY);
+    const onZoomCommand = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ kind: 'in' | 'out' | 'fit' }>).detail;
+      if (!detail) return;
+      if (detail.kind === 'in')  applyZoomAt(currentZoom() * 1.25, viewW / 2, viewH / 2);
+      if (detail.kind === 'out') applyZoomAt(currentZoom() / 1.25, viewW / 2, viewH / 2);
+      if (detail.kind === 'fit') applyZoomAt(1, viewW / 2, viewH / 2);
     };
-    vp.addEventListener('wheel', onWheel, { passive: false });
-    return () => vp.removeEventListener('wheel', onWheel);
+    window.addEventListener('tententoon-zoom', onZoomCommand);
+    return () => window.removeEventListener('tententoon-zoom', onZoomCommand);
   });
 
   // 1. Track viewport size.
@@ -506,6 +506,7 @@
     class="viewport"
     bind:this={viewport}
     style:cursor={cursor}
+    onwheel={onWheel}
     onpointerdown={onPointerDown}
     onpointermove={onPointerMove}
     onpointerup={onPointerUp}

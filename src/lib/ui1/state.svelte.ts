@@ -45,25 +45,6 @@ export const doc = $state<{
   aspect: 'match-image'
 });
 
-/**
- * Stage controller — actions the tool rail / keybindings can invoke that
- * are owned by the CanvasStage. Replaces the "set ui.zoom and hope an
- * effect picks it up" pattern, which made it hard to anchor zooms on a
- * sensible point (the previous tool-rail buttons silently no-op'd
- * because `ui.zoom = 1` is `'fit'` is `1` — same value, no re-render).
- *
- * CanvasStage overrides these on mount; they're no-ops until then.
- */
-export const stageController = $state<{
-  zoomIn: () => void;
-  zoomOut: () => void;
-  zoomFit: () => void;
-}>({
-  zoomIn: () => {},
-  zoomOut: () => {},
-  zoomFit: () => {}
-});
-
 export const playback = $state<{
   playing: boolean;
   t: number;

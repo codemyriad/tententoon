@@ -1,6 +1,43 @@
 import { defineConfig, type Plugin } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+/**
+ * Generate per-variant index.html files (dist/ui1/index.html, etc.) so that
+ * static hosts without SPA fallback (e.g. GitHub Pages) can serve the
+ * pathname routes directly. We start from the built dist/index.html and
+ * rewrite its relative `./assets/...` references to `../assets/...` so the
+ * one-level-deep variant page still finds the same bundle.
+ *
+ * Add new variants here as they're added to App.svelte's route switch.
+ */
+function generateVariantPages(): Plugin {
+  const VARIANTS = ['ui1'];
+  return {
+    name: 'generate-variant-pages',
+    apply: 'build',
+    closeBundle() {
+      const outDir = resolve(process.cwd(), 'dist');
+      const indexPath = resolve(outDir, 'index.html');
+      let indexHtml: string;
+      try {
+        indexHtml = readFileSync(indexPath, 'utf-8');
+      } catch {
+        return; // no index.html — nothing to mirror
+      }
+      const rewritten = indexHtml
+        .replace(/(\s(?:href|src)=")\.\//g, '$1../')
+        .replace(/(\s(?:href|src)=")(?!\.\.\/|https?:|\/|data:|#)([^"]+)/g, '$1../$2');
+      for (const variant of VARIANTS) {
+        const dir = resolve(outDir, variant);
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(resolve(dir, 'index.html'), rewritten);
+      }
+    }
+  };
+}
 
 /**
  * Dev-only proxy for fal.ai upscaling.
@@ -92,6 +129,6 @@ export default defineConfig({
   // Relative base so the built site works at any path on the host
   // (root, subdirectory, or static-file hosts like GitHub Pages).
   base: './',
-  plugins: [svelte(), falUpscaleProxy()],
+  plugins: [svelte(), falUpscaleProxy(), generateVariantPages()],
   server: { host: '127.0.0.1', port: 5173, strictPort: true }
 });
