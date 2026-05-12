@@ -102,11 +102,8 @@
 {#if showUi1}
   <!--
     /ui1 owns the full viewport — top bar / tool rail / canvas / inspector /
-    timeline — so we skip the <main> chrome the legacy view uses. The "back"
-    link sits absolutely-positioned over the top bar so the chrome stays
-    flush.
+    timeline — so we skip the <main> chrome the legacy view uses.
   -->
-  <a class="ui-back-link" href={import.meta.env.BASE_URL}>← Back to main view</a>
   <UiVariant1 />
 {:else}
 <main>
@@ -226,21 +223,6 @@
     text-decoration-color: var(--border);
   }
   .nav a:hover { color: var(--teal); }
-  .ui-back-link {
-    position: fixed;
-    top: 14px;
-    right: 14px;
-    z-index: 1000;
-    font-size: 11px;
-    color: rgba(0, 0, 0, 0.55);
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(4px);
-    padding: 4px 8px;
-    border-radius: 6px;
-    text-decoration: none;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-  }
-  .ui-back-link:hover { background: rgba(255, 255, 255, 0.95); }
   .nav .link {
     background: none;
     border: none;
