@@ -48,10 +48,13 @@
   //     RotatedLogPanel). Kept around as a hash route both because it
   //     pre-dates the path scheme and because hash routes work without
   //     SPA-fallback configuration on static hosts.
-  //   Pathname matching strips BASE_URL so the same code works at root or
-  //     in a subdirectory deploy. `popstate` covers Back/Forward; in-app
-  //     navigation can use either <a href> (full reload) or pushState +
-  //     a manual `pathname = …` update if it grows in.
+  //   Pathname matching is tail-based (`…/ui1` or `…/ui1/`) so the same
+  //     code works at root, in a subdirectory deploy (e.g. GitHub Pages
+  //     under `/<repo>/ui1/`), and regardless of whether the host added a
+  //     trailing slash for the directory served by vite.config.ts's
+  //     generateVariantPages plugin. `popstate` covers Back/Forward;
+  //     in-app navigation can use either <a href> (full reload) or
+  //     pushState + a manual `pathname = …` update if it grows in.
   let pathname = $state(typeof window !== 'undefined' ? window.location.pathname : '/');
   let hash = $state(typeof window !== 'undefined' ? window.location.hash : '');
   $effect(() => {
@@ -65,14 +68,8 @@
       window.removeEventListener('popstate', onPop);
     };
   });
-  const route = $derived.by(() => {
-    const base = import.meta.env.BASE_URL.replace(/\/$/, '');
-    let p = pathname;
-    if (base && p.startsWith(base)) p = p.slice(base.length);
-    return p || '/';
-  });
   const showInternals = $derived(hash === '#internals');
-  const showUi1 = $derived(route === '/ui1');
+  const showUi1 = $derived(/(?:^|\/)ui1\/?$/.test(pathname));
 
   $effect(() => {
     if (bootstrapped || imageState.source) return;
