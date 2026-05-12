@@ -66,16 +66,6 @@
 </script>
 
 <div class="ui1-root theme-{ui.theme}">
-  <!--
-    DIAGNOSTIC INDICATOR — reads ui.zoom directly to verify reactivity.
-    If wheel/buttons update this text but NOT the canvas, the bug is in
-    the canvas-rendering path (dispFit / style: directives). If this text
-    DOESN'T change either, the bug is in cross-module $state reactivity.
-    Remove once confirmed.
-  -->
-  <div class="zoom-debug">
-    ui.zoom = <strong>{typeof ui.zoom === 'number' ? ui.zoom.toFixed(3) : ui.zoom}</strong>
-  </div>
   <TopBar {canvas} {renderFrame} />
   <div class="body">
     <ToolRail />
@@ -137,18 +127,4 @@
   @media (max-width: 1000px) {
     .stages { flex-direction: column; }
   }
-  .zoom-debug {
-    position: fixed;
-    top: 8px;
-    right: 8px;
-    background: #d94f2c;
-    color: #fff;
-    padding: 6px 10px;
-    border-radius: 6px;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    z-index: 99999;
-    pointer-events: none;
-  }
-  .zoom-debug strong { font-weight: 700; }
 </style>

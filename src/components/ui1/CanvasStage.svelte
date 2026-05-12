@@ -41,9 +41,6 @@
   const MAX_ZOOM = 8;
   const MIN_ZOOM = 1;
 
-  function currentZoom(): number {
-    return ui.zoom === 'fit' ? 1 : (ui.zoom as number);
-  }
   function clampZoom(z: number): number {
     return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z));
   }
@@ -53,8 +50,13 @@
   let viewW = $state(0);
   let viewH = $state(0);
 
-  // Pan offset (CSS px) of the image centre relative to the viewport
-  // centre. (0, 0) means "centred"; non-zero only matters when zoom > 1.
+  // Zoom + pan are LOCAL state, not in the cross-module `ui` rune. The
+  // diagnostic indicator showed that writes to ui.zoom from this component
+  // didn't propagate to template reads in UiVariant1 — the .svelte.ts
+  // module appears to be getting separate proxy instances per importer
+  // under this Vite/svelte-plugin setup. Local state in a single component
+  // sidesteps the whole problem.
+  let zoom = $state(1);
   let pan = $state({ x: 0, y: 0 });
 
   /** Fit at zoom = 1 — image letterboxed inside the viewport. */
@@ -74,12 +76,7 @@
   /** Effective placement after zoom + pan. Used for everything visible. */
   const dispFit = $derived.by(() => {
     if (!fit) return null;
-    // INLINED — reading ui.zoom directly inside the $derived.by callback
-    // rather than through the currentZoom() helper, in case Svelte 5's
-    // reactive tracking isn't propagating through the function-call
-    // boundary for some reason. (Helper version was logged to set ui.zoom
-    // correctly but the template never re-rendered.)
-    const z = ui.zoom === 'fit' ? 1 : (ui.zoom as number);
+    const z = zoom;
     const w = fit.w * z;
     const h = fit.h * z;
     return {
@@ -97,7 +94,7 @@
 
   function clampPan(p: { x: number; y: number }): { x: number; y: number } {
     if (!fit) return { x: 0, y: 0 };
-    const z = currentZoom();
+    const z = zoom;
     const extraX = Math.max(0, fit.w * z - viewW);
     const extraY = Math.max(0, fit.h * z - viewH);
     return {
@@ -106,14 +103,11 @@
     };
   }
 
-  // Reset pan/zoom when a new image is loaded. Zoom is driven exclusively
-  // by applyZoomAt below (called from wheel / pinch / tool-rail actions),
-  // so we don't need any "external ui.zoom change" tracking — the source
-  // of truth is the single function.
+  // Reset pan/zoom when a new image is loaded.
   $effect(() => {
     void doc.image;
     pan = { x: 0, y: 0 };
-    if (ui.zoom !== 'fit') ui.zoom = 'fit';
+    zoom = 1;
   });
 
   // Re-clamp pan when the viewport changes size (window resize, etc.).
@@ -136,8 +130,8 @@
     const imgY = (cssY - dispFit.cssY0) / dispFit.scale;
     const newPanX = cssX - viewW / 2 + (fit.w * z) / 2 - imgX * fit.scaleCss * z;
     const newPanY = cssY - viewH / 2 + (fit.h * z) / 2 - imgY * fit.scaleCss * z;
+    zoom = z;
     pan = z <= 1 ? { x: 0, y: 0 } : clampPan({ x: newPanX, y: newPanY });
-    ui.zoom = z <= 1 ? 'fit' : z;
   }
 
 
@@ -149,7 +143,7 @@
     const cssX = e.clientX - r.left;
     const cssY = e.clientY - r.top;
     const factor = Math.exp(-e.deltaY * 0.0025);
-    applyZoomAt(currentZoom() * factor, cssX, cssY);
+    applyZoomAt(zoom * factor, cssX, cssY);
   }
 
   // Tool-rail zoom commands come in as custom DOM events.
@@ -157,8 +151,8 @@
     const onZoomCommand = (ev: Event) => {
       const detail = (ev as CustomEvent<{ kind: 'in' | 'out' | 'fit' }>).detail;
       if (!detail) return;
-      if (detail.kind === 'in')  applyZoomAt(currentZoom() * 1.25, viewW / 2, viewH / 2);
-      if (detail.kind === 'out') applyZoomAt(currentZoom() / 1.25, viewW / 2, viewH / 2);
+      if (detail.kind === 'in')  applyZoomAt(zoom * 1.25, viewW / 2, viewH / 2);
+      if (detail.kind === 'out') applyZoomAt(zoom / 1.25, viewW / 2, viewH / 2);
       if (detail.kind === 'fit') applyZoomAt(1, viewW / 2, viewH / 2);
     };
     window.addEventListener('tententoon-zoom', onZoomCommand);
@@ -326,7 +320,7 @@
       x: (midCss.x - dispFit.cssX0) / dispFit.scale,
       y: (midCss.y - dispFit.cssY0) / dispFit.scale
     };
-    pinch = { startDist: dist, startZoom: currentZoom(), midImg };
+    pinch = { startDist: dist, startZoom: zoom, midImg };
   }
 
   function updatePinch(): void {
@@ -338,8 +332,8 @@
     const z = clampZoom(pinch.startZoom * (dist / pinch.startDist));
     const newPanX = midCss.x - viewW / 2 + (fit.w * z) / 2 - pinch.midImg.x * fit.scaleCss * z;
     const newPanY = midCss.y - viewH / 2 + (fit.h * z) / 2 - pinch.midImg.y * fit.scaleCss * z;
+    zoom = z;
     pan = z <= 1 ? { x: 0, y: 0 } : clampPan({ x: newPanX, y: newPanY });
-    ui.zoom = z <= 1 ? 'fit' : z;
   }
 
   function onPointerDown(e: PointerEvent) {
@@ -568,7 +562,7 @@
       <!-- HUD: zoom chip + coords (only once we have a fit ratio). -->
       {#if fit && dispFit}
         <div class="hud-tl mono">
-          {ui.zoom === 'fit' ? 'Fit' : `${Math.round(dispFit.zoom * 100)}%`}
+          {zoom === 1 ? 'Fit' : `${Math.round(zoom * 100)}%`}
           · {Math.round(fit.scaleCss * dispFit.zoom * 100)}%
         </div>
         {#if hasRect}

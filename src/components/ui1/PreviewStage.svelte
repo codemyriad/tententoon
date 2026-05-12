@@ -93,7 +93,6 @@
     const w = Math.max(1, Math.round(fit.w * dpr));
     const h = Math.max(1, Math.round(fit.h * dpr));
     void playback.t;
-    void ui.zoom;
     const inputs = buildRenderInputs(doc.image, pixels, doc.rect, w, h);
     if (!inputs) return;
     renderer.render(inputs);
