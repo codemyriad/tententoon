@@ -6,7 +6,7 @@
 
   type Props = {
     canvas: HTMLCanvasElement | null;
-    renderFrame: (off: HTMLCanvasElement, frame: number, total: number) => Promise<void> | void;
+    renderFrame: (off: HTMLCanvasElement, t: number) => Promise<void> | void;
   };
   let { canvas, renderFrame }: Props = $props();
 

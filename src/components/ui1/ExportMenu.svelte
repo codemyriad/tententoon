@@ -2,22 +2,24 @@
   import Icon from './Icon.svelte';
   import { ui, doc, playback } from '../../lib/ui1/state.svelte';
   import { exportPng } from '../../lib/ui1/exports/png';
-  import { startRecording, pickMimeType } from '../../lib/ui1/exports/mp4';
-  import { exportGif, type GifProgress } from '../../lib/ui1/exports/gif';
+  import { exportVideo, pickMimeType } from '../../lib/ui1/exports/mp4';
 
-  // Caller passes the live canvas (used by the MP4 path), and a per-frame
-  // render fn (used by the GIF path) so this component doesn't need to
-  // know about the renderer.
+  // Caller passes a per-frame render fn (which renders to ANY canvas at
+  // a given progress t ∈ [0,1)). The MP4 export now drives a hidden
+  // canvas with this fn — the live preview is no longer captured, so the
+  // user can scrub / click during a recording without corrupting it.
   type Props = {
     canvas: HTMLCanvasElement | null;
-    renderFrame: (off: HTMLCanvasElement, frame: number, total: number) => Promise<void> | void;
+    renderFrame: (off: HTMLCanvasElement, t: number) => Promise<void> | void;
   };
-  let { canvas, renderFrame }: Props = $props();
+  let { renderFrame }: Props = $props();
 
   let busy = $state(false);
-  let progress = $state<{ kind: GifProgress['kind']; done: number; total: number } | null>(null);
+  let videoProgress = $state<number | null>(null); // 0..1; null = idle
+  // Cancellation flag handed to exportVideo so it can bail on next frame.
+  let videoCancel: { cancelled: boolean } | null = null;
 
-  const mp4Ext = $derived.by(() => pickMimeType()?.ext ?? 'webm');
+  const videoExt = $derived.by(() => pickMimeType()?.ext ?? 'webm');
 
   async function doPng() {
     if (!doc.image || busy) return;
@@ -35,55 +37,35 @@
   }
 
   async function doVideo() {
-    if (!doc.image || !canvas || busy) return;
+    if (!doc.image || busy) return;
     busy = true;
     ui.exportMenuOpen = false;
-    const wasPlaying = playback.playing;
-    const startT = playback.t;
-    playback.t = 0;
-    playback.playing = true;
+    videoProgress = 0;
+    videoCancel = { cancelled: false };
     try {
-      const handle = startRecording(canvas, basename(''));
-      // Wait for one full loop.
-      await new Promise((r) => setTimeout(r, playback.loopLength * 1000));
-      await handle.stop();
-      ui.exportToast = `Saved .${handle.ext}.`;
+      const { ext } = await exportVideo({
+        imageWidth: doc.image.width,
+        imageHeight: doc.image.height,
+        loopSeconds: playback.loopLength,
+        renderFrame,
+        filenameBase: basename(''),
+        signal: videoCancel,
+        onProgress: (p) => { videoProgress = p.fraction; }
+      });
+      ui.exportToast = `Saved .${ext}.`;
     } catch (e) {
-      ui.exportToast = `Video failed: ${e instanceof Error ? e.message : String(e)}`;
+      const msg = e instanceof Error ? e.message : String(e);
+      ui.exportToast = msg === 'cancelled' ? 'Export cancelled.' : `Video failed: ${msg}`;
     } finally {
-      playback.playing = wasPlaying;
-      playback.t = startT;
+      videoProgress = null;
+      videoCancel = null;
       busy = false;
       hideToastAfter();
     }
   }
 
-  async function doGif() {
-    if (!doc.image || busy) return;
-    busy = true;
-    ui.exportMenuOpen = false;
-    progress = { kind: 'render', done: 0, total: 1 };
-    try {
-      await exportGif({
-        imageWidth: doc.image.width,
-        imageHeight: doc.image.height,
-        loopSeconds: playback.loopLength,
-        renderFrame,
-        filename: basename('.gif'),
-        onProgress: (p) => {
-          if (p.kind === 'done') progress = null;
-          else if (p.kind === 'error') progress = null;
-          else progress = { kind: p.kind, done: p.done, total: p.total };
-        }
-      });
-      ui.exportToast = 'GIF saved.';
-    } catch (e) {
-      ui.exportToast = `GIF failed: ${e instanceof Error ? e.message : String(e)}`;
-    } finally {
-      progress = null;
-      busy = false;
-      hideToastAfter();
-    }
+  function cancelVideo() {
+    if (videoCancel) videoCancel.cancelled = true;
   }
 
   function basename(ext: string): string {
@@ -119,19 +101,11 @@
       </span>
       <span class="dl"><Icon name="download" size={14} /></span>
     </button>
-    <button class="item hi" disabled={busy || !doc.image || !canvas} onclick={doVideo}>
+    <button class="item hi" disabled={busy || !doc.image} onclick={doVideo}>
       <span class="ic"><Icon name="film" size={14} /></span>
       <span class="text">
-        <span class="t">{mp4Ext.toUpperCase()}</span>
-        <span class="s">{playback.loopLength.toFixed(0)}s loop · captures live preview</span>
-      </span>
-      <span class="dl"><Icon name="download" size={14} /></span>
-    </button>
-    <button class="item" disabled={busy || !doc.image} onclick={doGif}>
-      <span class="ic"><Icon name="gif" size={14} /></span>
-      <span class="text">
-        <span class="t">GIF</span>
-        <span class="s">720p · ~18 fps · encoded in a worker</span>
+        <span class="t">{videoExt.toUpperCase()}</span>
+        <span class="s">{playback.loopLength.toFixed(0)}s loop · isolated render, can't be disturbed</span>
       </span>
       <span class="dl"><Icon name="download" size={14} /></span>
     </button>
@@ -140,13 +114,32 @@
       <span>All exports run locally</span>
       <span class="mono">⌘E</span>
     </div>
-    {#if progress}
-      <div class="progress mono">
-        {progress.kind === 'render' ? 'Rendering' : 'Encoding'} · {progress.done}/{progress.total}
-      </div>
-    {/if}
   </div>
 {/if}
+
+<!--
+  Modal overlay during a video export. Blocks UI clicks (covers the page)
+  so the user can't drift attention into something they expect to affect
+  the output; shows live progress so they know it's working; offers a
+  Cancel button. The actual rendering is happening off-screen, so user
+  panics don't corrupt anything either way — this is purely a clarity
+  affordance.
+-->
+{#if videoProgress !== null}
+  <div class="recording-mask" role="dialog" aria-modal="true" aria-label="Exporting video">
+    <div class="recording-card">
+      <div class="rec-title">Exporting {videoExt.toUpperCase()}…</div>
+      <div class="rec-bar" role="progressbar" aria-valuenow={Math.round(videoProgress * 100)} aria-valuemin="0" aria-valuemax="100">
+        <div class="rec-bar-fill" style:width="{(videoProgress * 100).toFixed(1)}%"></div>
+      </div>
+      <div class="rec-text mono">
+        {(videoProgress * 100).toFixed(0)}% · {(videoProgress * playback.loopLength).toFixed(1)}s / {playback.loopLength.toFixed(1)}s
+      </div>
+      <button class="rec-cancel" onclick={cancelVideo}>Cancel</button>
+    </div>
+  </div>
+{/if}
+
 {#if ui.exportToast}
   <div class="toast">{ui.exportToast}</div>
 {/if}
@@ -204,13 +197,57 @@
     justify-content: space-between;
   }
   .mono { font-family: var(--font-mono); }
-  .progress {
-    padding: 6px 10px;
+  .recording-mask {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(2px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .recording-card {
+    background: var(--panel);
+    color: var(--ink);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 20px 22px;
+    min-width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .rec-title { font-size: 14px; font-weight: 600; }
+  .rec-bar {
+    height: 8px;
+    background: var(--panel-2);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .rec-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 80ms linear;
+  }
+  .rec-text {
     font-size: 11px;
     color: var(--muted);
-    border-top: 1px solid var(--border);
-    margin-top: 4px;
+    font-variant-numeric: tabular-nums;
   }
+  .rec-cancel {
+    align-self: flex-end;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ink-2);
+    border: 1px solid var(--border);
+  }
+  .rec-cancel:hover { background: var(--panel-2); color: var(--ink); }
   .toast {
     position: fixed;
     bottom: 16px;

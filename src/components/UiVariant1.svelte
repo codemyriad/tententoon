@@ -27,7 +27,7 @@
   // Plumbing the live canvas + a render-frame fn up to the export menu in
   // the top bar. Both are set by CanvasStage when it mounts.
   let canvas = $state<HTMLCanvasElement | null>(null);
-  let renderFrame = $state<(off: HTMLCanvasElement, frame: number, total: number) => Promise<void>>(
+  let renderFrame = $state<(off: HTMLCanvasElement, t: number) => Promise<void>>(
     async () => {}
   );
 

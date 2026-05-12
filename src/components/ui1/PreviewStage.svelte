@@ -21,7 +21,7 @@
 
   type Props = {
     bindCanvas?: (canvas: HTMLCanvasElement | null) => void;
-    bindRenderFrame?: (fn: (off: HTMLCanvasElement, frame: number, total: number) => Promise<void>) => void;
+    bindRenderFrame?: (fn: (off: HTMLCanvasElement, t: number) => Promise<void>) => void;
   };
   let { bindCanvas, bindRenderFrame }: Props = $props();
 
@@ -114,16 +114,21 @@
     return () => cancelAnimationFrame(raf);
   });
 
-  async function renderFrameToOffscreen(off: HTMLCanvasElement, frame: number, total: number): Promise<void> {
+  /**
+   * Render one frame to the given off-screen canvas at raw progress t
+   * (0..1). Direction handling lives here, so callers (video export)
+   * stay agnostic. CPU tier so the renderer plays well with arbitrary
+   * canvases (no transferControlToOffscreen entanglement).
+   */
+  async function renderFrameToOffscreen(off: HTMLCanvasElement, t: number): Promise<void> {
     if (!doc.image || !pixels) return;
     const r = createEscherZoomRenderer({ forceTier: 'cpu-main' });
     await r.init(off);
     try {
       const u = buildRenderInputs(doc.image, pixels, doc.rect, off.width, off.height);
       if (!u) return;
-      const tRaw = frame / total;
-      const t = playback.direction === 'in' ? tRaw : 1 - tRaw;
-      r.render({ ...u, t });
+      const effT = playback.direction === 'in' ? t : 1 - t;
+      r.render({ ...u, t: effT });
     } finally {
       r.dispose();
     }
