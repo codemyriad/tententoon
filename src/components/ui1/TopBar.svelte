@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
   import ExportMenu from './ExportMenu.svelte';
+  import InfoModal from './InfoModal.svelte';
   import {
     ui, doc, setImage, commitNewRect,
     setThemeOverride, readThemeOverride, systemTheme
@@ -14,6 +15,7 @@
   let { canvas, renderFrame }: Props = $props();
 
   let input: HTMLInputElement;
+  let infoOpen = $state(false);
 
   function reset() {
     // Zero rect → commitNewRect also nulls doc.crop so the working
@@ -59,10 +61,15 @@
 </script>
 
 <header class="top">
-  <div class="brand">
+  <button
+    class="brand"
+    onclick={() => (infoOpen = true)}
+    title="About tententoon"
+    aria-label="About tententoon"
+  >
     <span class="logo">t</span>
     <span class="name">tententoon</span>
-  </div>
+  </button>
   <span class="div"></span>
   {#if doc.image}
     <span class="file">
@@ -74,6 +81,14 @@
     <span class="file empty">Untitled · no image</span>
   {/if}
   <span class="grow"></span>
+  <button
+    class="btn ghost icon-only"
+    onclick={() => (infoOpen = true)}
+    title="About tententoon"
+    aria-label="About tententoon"
+  >
+    <Icon name="info" size={14} />
+  </button>
   <button
     class="btn ghost icon-only theme-toggle"
     class:auto={followsSystem}
@@ -109,6 +124,8 @@
   </div>
 </header>
 
+<InfoModal open={infoOpen} onClose={() => (infoOpen = false)} />
+
 <style>
   .top {
     display: flex;
@@ -120,7 +137,21 @@
     position: relative;
     flex-shrink: 0;
   }
-  .brand { display: flex; align-items: center; gap: 8px; }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: 0;
+    padding: 4px 4px 4px 0;
+    margin: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    border-radius: 6px;
+  }
+  .brand:hover { background: var(--panel-2); }
+  .brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .logo {
     width: 22px;
     height: 22px;
