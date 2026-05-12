@@ -486,9 +486,12 @@
   // ---- visual derived data for the overlay ----
 
   const overlayRect = $derived.by(() => {
-    if (!hasRect || !fit) return null;
+    if (!hasRect || !dispFit) return null;
     const tl = imgToCss(doc.rect.x, doc.rect.y);
-    return { x: tl.x, y: tl.y, w: doc.rect.w * fit.scaleCss, h: doc.rect.h * fit.scaleCss };
+    // Size must use dispFit.scale (zoom-aware), not fit.scaleCss — otherwise
+    // the rect's top-left tracks the image but its dimensions stay at zoom=1,
+    // so it drifts as you zoom.
+    return { x: tl.x, y: tl.y, w: doc.rect.w * dispFit.scale, h: doc.rect.h * dispFit.scale };
   });
 </script>
 
