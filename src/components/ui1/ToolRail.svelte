@@ -5,14 +5,12 @@
   function set(tool: Tool) {
     ui.tool = tool;
   }
-  // Dispatch a custom DOM event for the CanvasStage to pick up. Using a
-  // plain browser event sidesteps any Svelte 5 cross-component reactivity
-  // edge cases (the earlier $state-callback approach was silently no-op'd).
   const dispatchZoom = (kind: 'in' | 'out' | 'fit') => {
+    console.log('[ui1-zoom] ToolRail.dispatchZoom', kind);
     window.dispatchEvent(new CustomEvent('tententoon-zoom', { detail: { kind } }));
   };
-  const zoomIn = () => dispatchZoom('in');
-  const zoomOut = () => dispatchZoom('out');
+  const zoomIn = () => { console.log('[ui1-zoom] ToolRail zoomIn button clicked'); dispatchZoom('in'); };
+  const zoomOut = () => { console.log('[ui1-zoom] ToolRail zoomOut button clicked'); dispatchZoom('out'); };
 </script>
 
 <nav class="rail" aria-label="Tools">
