@@ -74,7 +74,12 @@
   /** Effective placement after zoom + pan. Used for everything visible. */
   const dispFit = $derived.by(() => {
     if (!fit) return null;
-    const z = currentZoom();
+    // INLINED — reading ui.zoom directly inside the $derived.by callback
+    // rather than through the currentZoom() helper, in case Svelte 5's
+    // reactive tracking isn't propagating through the function-call
+    // boundary for some reason. (Helper version was logged to set ui.zoom
+    // correctly but the template never re-rendered.)
+    const z = ui.zoom === 'fit' ? 1 : (ui.zoom as number);
     const w = fit.w * z;
     const h = fit.h * z;
     return {
