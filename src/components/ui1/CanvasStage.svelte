@@ -18,7 +18,16 @@
    *                          resizes. Shift locks aspect to the active
    *                          chip; Alt resizes from centre.
    *   ui.tool === 'select' — drag the rect body / handles only.
-   *   ui.tool === 'pan'    — drag scrolls the viewport (TODO; no-op).
+   *   ui.tool === 'pan'    — drag pans the view at any zoom.
+   *
+   * Zoom + pan:
+   *   - Mouse wheel zooms around the cursor.
+   *   - Pinch (two pointers) zooms around the midpoint and pans together.
+   *   - Middle-mouse drag pans regardless of tool.
+   *   - Tool rail zoom buttons trigger ui.zoom changes; an effect rescales
+   *     the local pan so the viewport centre stays put.
+   *   Rect coordinates stay in image px throughout; we just compose a
+   *   single CSS-px ↔ image-px transform that includes zoom and pan.
    */
 
   import {
@@ -29,12 +38,26 @@
   } from '../../lib/ui1/state.svelte';
   import { snapRectToAspect, phase } from '../../lib/ui1/render';
 
+  const MAX_ZOOM = 8;
+  const MIN_ZOOM = 1;
+
+  function currentZoom(): number {
+    return ui.zoom === 'fit' ? 1 : (ui.zoom as number);
+  }
+  function clampZoom(z: number): number {
+    return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z));
+  }
+
   let viewport: HTMLDivElement | null = $state(null);
   let imageCanvas: HTMLCanvasElement | null = $state(null);
   let viewW = $state(0);
   let viewH = $state(0);
 
-  /** Image area inside the viewport, in CSS px. Letterboxed to image aspect. */
+  // Pan offset (CSS px) of the image centre relative to the viewport
+  // centre. (0, 0) means "centred"; non-zero only matters when zoom > 1.
+  let pan = $state({ x: 0, y: 0 });
+
+  /** Fit at zoom = 1 — image letterboxed inside the viewport. */
   const fit = $derived.by(() => {
     if (!doc.image || viewW <= 0 || viewH <= 0) return null;
     const ia = doc.image.width / doc.image.height;
@@ -44,14 +67,106 @@
     return {
       w,
       h,
-      offX: (viewW - w) / 2,
-      offY: (viewH - h) / 2,
       scaleCss: w / doc.image.width
+    };
+  });
+
+  /** Effective placement after zoom + pan. Used for everything visible. */
+  const dispFit = $derived.by(() => {
+    if (!fit) return null;
+    const z = currentZoom();
+    const w = fit.w * z;
+    const h = fit.h * z;
+    return {
+      w,
+      h,
+      cssX0: viewW / 2 + pan.x - w / 2,
+      cssY0: viewH / 2 + pan.y - h / 2,
+      scale: fit.scaleCss * z,
+      zoom: z
     };
   });
 
   const hasRect = $derived(doc.rect.w > 0 && doc.rect.h > 0);
   const ready = $derived(phase() !== 'empty');
+
+  function clampPan(p: { x: number; y: number }): { x: number; y: number } {
+    if (!fit) return { x: 0, y: 0 };
+    const z = currentZoom();
+    const extraX = Math.max(0, fit.w * z - viewW);
+    const extraY = Math.max(0, fit.h * z - viewH);
+    return {
+      x: Math.max(-extraX / 2, Math.min(extraX / 2, p.x)),
+      y: Math.max(-extraY / 2, Math.min(extraY / 2, p.y))
+    };
+  }
+
+  // Track external ui.zoom changes (e.g. tool-rail buttons) and rescale pan
+  // so the viewport centre stays put. When we zoom via wheel/pinch we
+  // pre-set `prevZoom` to the new value to bypass this effect — it'd
+  // otherwise wipe the cursor-anchored pan we just computed.
+  let prevZoom = 1;
+  $effect(() => {
+    const z = currentZoom();
+    if (z === prevZoom) return;
+    if (z <= 1) pan = { x: 0, y: 0 };
+    else pan = clampPan({ x: pan.x * z / prevZoom, y: pan.y * z / prevZoom });
+    prevZoom = z;
+  });
+
+  // Reset pan/zoom when a new image is loaded.
+  $effect(() => {
+    void doc.image;
+    pan = { x: 0, y: 0 };
+    prevZoom = 1;
+    if (ui.zoom !== 'fit') ui.zoom = 'fit';
+  });
+
+  // Re-clamp pan when the viewport changes size (window resize, etc.).
+  $effect(() => {
+    void viewW; void viewH; void fit;
+    const c = clampPan(pan);
+    if (c.x !== pan.x || c.y !== pan.y) pan = c;
+  });
+
+  /**
+   * Zoom to `newZ`, keeping the image point currently under (cssX, cssY)
+   * pinned to that screen location. Sets pan and ui.zoom atomically and
+   * bumps `prevZoom` so the centred-zoom effect above skips this update.
+   */
+  function applyZoomAt(newZ: number, cssX: number, cssY: number): void {
+    if (!fit || !dispFit) return;
+    const z = clampZoom(newZ);
+    // Image-space point at the cursor BEFORE zoom.
+    const imgX = (cssX - dispFit.cssX0) / dispFit.scale;
+    const imgY = (cssY - dispFit.cssY0) / dispFit.scale;
+    // New pan so that (imgX, imgY) is again at (cssX, cssY) after zoom.
+    //   cssX = viewW/2 + newPan.x - fit.w*z/2 + imgX * fit.scaleCss * z
+    const newPanX = cssX - viewW / 2 + (fit.w * z) / 2 - imgX * fit.scaleCss * z;
+    const newPanY = cssY - viewH / 2 + (fit.h * z) / 2 - imgY * fit.scaleCss * z;
+    prevZoom = z;
+    pan = z <= 1 ? { x: 0, y: 0 } : clampPan({ x: newPanX, y: newPanY });
+    ui.zoom = z <= 1 ? 'fit' : z;
+  }
+
+  // Wheel zoom (desktop). passive: false so we can preventDefault and stop
+  // the page from scrolling under us.
+  $effect(() => {
+    if (!viewport) return;
+    const vp = viewport;
+    const onWheel = (e: WheelEvent) => {
+      if (!ready) return;
+      e.preventDefault();
+      const r = vp.getBoundingClientRect();
+      const cssX = e.clientX - r.left;
+      const cssY = e.clientY - r.top;
+      // Smooth multiplicative zoom factor. deltaMode-aware via Math.exp.
+      const factor = Math.exp(-e.deltaY * 0.0025);
+      applyZoomAt(currentZoom() * factor, cssX, cssY);
+    };
+    vp.addEventListener('wheel', onWheel, { passive: false });
+    return () => vp.removeEventListener('wheel', onWheel);
+  });
 
   // 1. Track viewport size.
   $effect(() => {
@@ -67,18 +182,20 @@
     return () => ro.disconnect();
   });
 
-  // 2. Image-canvas: drawImage when image / size changes.
+  // 2. Image-canvas: draw at the image's NATIVE pixel resolution once per
+  //    image load. CSS then scales the canvas to dispFit.{w,h}, which means
+  //    zooming in stays crisp down to one source pixel per CSS pixel and
+  //    only blurs (browser bilinear) past native resolution. Avoids
+  //    re-drawing the image on every zoom step.
   $effect(() => {
-    if (!imageCanvas || !doc.image || !fit) return;
-    const dpr = window.devicePixelRatio || 1;
-    imageCanvas.width = Math.max(1, Math.round(fit.w * dpr));
-    imageCanvas.height = Math.max(1, Math.round(fit.h * dpr));
+    if (!imageCanvas || !doc.image) return;
+    imageCanvas.width = doc.image.width;
+    imageCanvas.height = doc.image.height;
     const ctx = imageCanvas.getContext('2d');
     if (!ctx) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(doc.image, 0, 0, fit.w, fit.h);
+    ctx.drawImage(doc.image, 0, 0);
   });
 
   // ---- pointer interaction ----
@@ -86,8 +203,19 @@
   type DragKind =
     | { kind: 'marquee'; startImg: { x: number; y: number } }
     | { kind: 'body'; startRect: Rect; startImg: { x: number; y: number } }
-    | { kind: 'handle'; opposite: { x: number; y: number }; signX: -1 | 1; signY: -1 | 1; centerStart: { x: number; y: number } | null };
+    | { kind: 'handle'; opposite: { x: number; y: number }; signX: -1 | 1; signY: -1 | 1; centerStart: { x: number; y: number } | null }
+    | { kind: 'pan'; startCss: { x: number; y: number }; startPan: { x: number; y: number } };
   let drag: DragKind | null = null;
+
+  // ---- pinch / multi-touch ----
+  // Active pointers (by pointerId). Single pointer → existing drag logic.
+  // Two pointers → pinch (zoom + pan together). Third+ ignored.
+  const activePointers = new Map<number, { x: number; y: number }>();
+  let pinch: {
+    startDist: number;
+    startZoom: number;
+    midImg: { x: number; y: number };
+  } | null = null;
   let dragMods = $state({ shift: false, alt: false });
   // Cursor follows hover state when not dragging: resize cursors over the
   // 8 handles, `move` over the rect body, crosshair (rect tool) or
@@ -104,7 +232,10 @@
   }
 
   function updateCursor(e: PointerEvent) {
-    if (drag) return;
+    if (drag) {
+      if (drag.kind === 'pan') cursor = 'grabbing';
+      return;
+    }
     if (!ready || !viewport) { cursor = 'default'; return; }
     const r = viewport.getBoundingClientRect();
     const cssX = e.clientX - r.left;
@@ -113,25 +244,26 @@
     if (h) { cursor = handleCursor(h); return; }
     const img = eventToImage(e);
     if (img && hasRect && inRect(img)) { cursor = 'move'; return; }
+    if (ui.tool === 'pan') { cursor = 'grab'; return; }
     cursor = ui.tool === 'rect' ? 'crosshair' : 'default';
   }
 
   /** Convert a pointer event into image-pixel coordinates. */
   function eventToImage(e: PointerEvent): { x: number; y: number } | null {
-    if (!viewport || !doc.image || !fit) return null;
+    if (!viewport || !doc.image || !dispFit) return null;
     const r = viewport.getBoundingClientRect();
     const cssX = e.clientX - r.left;
     const cssY = e.clientY - r.top;
     return {
-      x: (cssX - fit.offX) / fit.scaleCss,
-      y: (cssY - fit.offY) / fit.scaleCss
+      x: (cssX - dispFit.cssX0) / dispFit.scale,
+      y: (cssY - dispFit.cssY0) / dispFit.scale
     };
   }
 
   /** Image-space → CSS-px helper for the SVG overlay. */
   function imgToCss(x: number, y: number): { x: number; y: number } {
-    if (!fit) return { x: 0, y: 0 };
-    return { x: fit.offX + x * fit.scaleCss, y: fit.offY + y * fit.scaleCss };
+    if (!dispFit) return { x: 0, y: 0 };
+    return { x: dispFit.cssX0 + x * dispFit.scale, y: dispFit.cssY0 + y * dispFit.scale };
   }
 
   const handles: Array<{ corner: [number, number]; name: string }> = [
@@ -181,20 +313,69 @@
     return rect;
   }
 
+  function cssPoint(e: PointerEvent): { x: number; y: number } | null {
+    if (!viewport) return null;
+    const r = viewport.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  function startPinch(): void {
+    if (!dispFit || activePointers.size < 2) return;
+    const pts = [...activePointers.values()];
+    const midCss = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+    const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    if (dist < 1) return;
+    const midImg = {
+      x: (midCss.x - dispFit.cssX0) / dispFit.scale,
+      y: (midCss.y - dispFit.cssY0) / dispFit.scale
+    };
+    pinch = { startDist: dist, startZoom: currentZoom(), midImg };
+  }
+
+  function updatePinch(): void {
+    if (!pinch || !fit || activePointers.size < 2) return;
+    const pts = [...activePointers.values()];
+    const midCss = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+    const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    if (dist < 1) return;
+    const z = clampZoom(pinch.startZoom * (dist / pinch.startDist));
+    const newPanX = midCss.x - viewW / 2 + (fit.w * z) / 2 - pinch.midImg.x * fit.scaleCss * z;
+    const newPanY = midCss.y - viewH / 2 + (fit.h * z) / 2 - pinch.midImg.y * fit.scaleCss * z;
+    prevZoom = z;
+    pan = z <= 1 ? { x: 0, y: 0 } : clampPan({ x: newPanX, y: newPanY });
+    ui.zoom = z <= 1 ? 'fit' : z;
+  }
+
   function onPointerDown(e: PointerEvent) {
     if (!ready) return;
+    const cp = cssPoint(e);
+    if (!cp) return;
+    activePointers.set(e.pointerId, cp);
+
+    // Two pointers down → pinch mode. Cancel any single-pointer drag.
+    if (activePointers.size === 2) {
+      drag = null;
+      try { (e.currentTarget as Element).setPointerCapture(e.pointerId); } catch {}
+      startPinch();
+      return;
+    }
+    if (activePointers.size > 2) return;
+
+    // Single pointer. Existing rect logic + pan-tool / middle-mouse pan.
     const img = eventToImage(e);
     if (!img) return;
-    const cssRect = viewport!.getBoundingClientRect();
-    const cssX = e.clientX - cssRect.left;
-    const cssY = e.clientY - cssRect.top;
     dragMods = { shift: e.shiftKey, alt: e.altKey };
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
 
-    // Priority: handle > body > marquee. Tool only affects fallback.
-    // Old logic re-marquee'd inside an existing rect under the rect tool,
-    // wiping the rect to 0×0 the instant the user clicked on it.
-    const handle = hitHandle(cssX, cssY);
+    // Middle-mouse drag → pan regardless of tool.
+    if (e.button === 1) {
+      drag = { kind: 'pan', startCss: cp, startPan: { ...pan } };
+      return;
+    }
+
+    // Priority: handle > body > pan-tool-pan > marquee.
+    // Tool affects the empty-area fallback only.
+    const handle = hitHandle(cp.x, cp.y);
     if (handle) {
       const r = doc.rect;
       const oppX = handle.includes('w') ? r.x + r.w : (handle.includes('e') ? r.x : r.x + r.w / 2);
@@ -209,6 +390,10 @@
       drag = { kind: 'body', startRect: { ...doc.rect }, startImg: img };
       return;
     }
+    if (ui.tool === 'pan') {
+      drag = { kind: 'pan', startCss: cp, startPan: { ...pan } };
+      return;
+    }
     if (ui.tool === 'rect') {
       drag = { kind: 'marquee', startImg: img };
       doc.rect = { x: img.x, y: img.y, w: 0, h: 0 };
@@ -216,8 +401,25 @@
   }
 
   function onPointerMove(e: PointerEvent) {
+    // Track every active pointer for pinch math.
+    if (activePointers.has(e.pointerId)) {
+      const cp = cssPoint(e);
+      if (cp) activePointers.set(e.pointerId, cp);
+    }
+    if (pinch && activePointers.size >= 2) {
+      updatePinch();
+      return;
+    }
     if (!drag) {
       updateCursor(e);
+      return;
+    }
+    if (drag.kind === 'pan') {
+      const cp = cssPoint(e);
+      if (!cp) return;
+      const dx = cp.x - drag.startCss.x;
+      const dy = cp.y - drag.startCss.y;
+      pan = clampPan({ x: drag.startPan.x + dx, y: drag.startPan.y + dy });
       return;
     }
     const img = eventToImage(e);
@@ -266,9 +468,19 @@
   }
 
   function onPointerUp(e: PointerEvent) {
+    activePointers.delete(e.pointerId);
+    if (activePointers.size < 2) {
+      // Pinch ends as soon as we drop below two pointers.
+      pinch = null;
+    }
+    try { (e.currentTarget as Element).releasePointerCapture(e.pointerId); } catch {}
+    // Pan drags don't touch the rect — bail without the normalise pass.
+    if (drag?.kind === 'pan') {
+      drag = null;
+      return;
+    }
     if (!drag) return;
     drag = null;
-    try { (e.currentTarget as Element).releasePointerCapture(e.pointerId); } catch {}
     // Normalise: clamp to image and ensure min size.
     if (doc.image) {
       const minSide = 8;
@@ -306,10 +518,10 @@
       <canvas
         bind:this={imageCanvas}
         class="layer image"
-        style:left="{fit?.offX ?? 0}px"
-        style:top="{fit?.offY ?? 0}px"
-        style:width="{fit?.w ?? 0}px"
-        style:height="{fit?.h ?? 0}px"
+        style:left="{dispFit?.cssX0 ?? 0}px"
+        style:top="{dispFit?.cssY0 ?? 0}px"
+        style:width="{dispFit?.w ?? 0}px"
+        style:height="{dispFit?.h ?? 0}px"
       ></canvas>
       {#if overlayRect}
         <svg class="overlay" xmlns="http://www.w3.org/2000/svg">
@@ -356,9 +568,12 @@
           style:top="{overlayRect.y + overlayRect.h + 6}px"
         >{Math.round(doc.rect.w)} × {Math.round(doc.rect.h)}</span>
       {/if}
-      <!-- HUD: zoom-fit chip + coords (only once we have a fit ratio). -->
-      {#if fit}
-        <div class="hud-tl mono">Fit · {Math.round(fit.scaleCss * 100)}%</div>
+      <!-- HUD: zoom chip + coords (only once we have a fit ratio). -->
+      {#if fit && dispFit}
+        <div class="hud-tl mono">
+          {ui.zoom === 'fit' ? 'Fit' : `${Math.round(dispFit.zoom * 100)}%`}
+          · {Math.round(fit.scaleCss * dispFit.zoom * 100)}%
+        </div>
         {#if hasRect}
           <div class="hud-br mono">{Math.round(doc.rect.x)}, {Math.round(doc.rect.y)} · {Math.round(doc.rect.w)}×{Math.round(doc.rect.h)}</div>
         {/if}

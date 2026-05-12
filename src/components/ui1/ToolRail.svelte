@@ -5,14 +5,16 @@
   function set(tool: Tool) {
     ui.tool = tool;
   }
+  // Buttons step zoom multiplicatively. Below 1 we snap back to 'fit'.
+  // The CanvasStage effect rescales pan around the viewport centre.
   function zoomIn() {
-    if (ui.zoom === 'fit') ui.zoom = 1;
-    else ui.zoom = Math.min(8, (ui.zoom as number) * 1.25);
+    const cur = ui.zoom === 'fit' ? 1 : (ui.zoom as number);
+    ui.zoom = Math.min(8, cur * 1.25);
   }
   function zoomOut() {
-    if (ui.zoom === 'fit') return;
-    const next = (ui.zoom as number) / 1.25;
-    ui.zoom = next < 0.15 ? 'fit' : next;
+    const cur = ui.zoom === 'fit' ? 1 : (ui.zoom as number);
+    const next = cur / 1.25;
+    ui.zoom = next <= 1 ? 'fit' : next;
   }
 </script>
 
