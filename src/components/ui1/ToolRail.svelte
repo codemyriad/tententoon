@@ -1,21 +1,14 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
-  import { ui, type Tool } from '../../lib/ui1/state.svelte';
+  import { ui, stageController, type Tool } from '../../lib/ui1/state.svelte';
 
   function set(tool: Tool) {
     ui.tool = tool;
   }
-  // Buttons step zoom multiplicatively. Below 1 we snap back to 'fit'.
-  // The CanvasStage effect rescales pan around the viewport centre.
-  function zoomIn() {
-    const cur = ui.zoom === 'fit' ? 1 : (ui.zoom as number);
-    ui.zoom = Math.min(8, cur * 1.25);
-  }
-  function zoomOut() {
-    const cur = ui.zoom === 'fit' ? 1 : (ui.zoom as number);
-    const next = cur / 1.25;
-    ui.zoom = next <= 1 ? 'fit' : next;
-  }
+  // Buttons go through the CanvasStage's stage controller — same code path
+  // as wheel/pinch, anchored on the viewport centre.
+  const zoomIn = () => stageController.zoomIn();
+  const zoomOut = () => stageController.zoomOut();
 </script>
 
 <nav class="rail" aria-label="Tools">

@@ -34,6 +34,7 @@
     doc,
     ui,
     chipAspect,
+    stageController,
     type Rect
   } from '../../lib/ui1/state.svelte';
   import { snapRectToAspect, phase } from '../../lib/ui1/render';
@@ -101,24 +102,13 @@
     };
   }
 
-  // Track external ui.zoom changes (e.g. tool-rail buttons) and rescale pan
-  // so the viewport centre stays put. When we zoom via wheel/pinch we
-  // pre-set `prevZoom` to the new value to bypass this effect — it'd
-  // otherwise wipe the cursor-anchored pan we just computed.
-  let prevZoom = 1;
-  $effect(() => {
-    const z = currentZoom();
-    if (z === prevZoom) return;
-    if (z <= 1) pan = { x: 0, y: 0 };
-    else pan = clampPan({ x: pan.x * z / prevZoom, y: pan.y * z / prevZoom });
-    prevZoom = z;
-  });
-
-  // Reset pan/zoom when a new image is loaded.
+  // Reset pan/zoom when a new image is loaded. Zoom is driven exclusively
+  // by applyZoomAt below (called from wheel / pinch / tool-rail actions),
+  // so we don't need any "external ui.zoom change" tracking — the source
+  // of truth is the single function.
   $effect(() => {
     void doc.image;
     pan = { x: 0, y: 0 };
-    prevZoom = 1;
     if (ui.zoom !== 'fit') ui.zoom = 'fit';
   });
 
@@ -131,31 +121,40 @@
 
   /**
    * Zoom to `newZ`, keeping the image point currently under (cssX, cssY)
-   * pinned to that screen location. Sets pan and ui.zoom atomically and
-   * bumps `prevZoom` so the centred-zoom effect above skips this update.
+   * pinned to that screen location. Atomic: pan and ui.zoom update
+   * together so dispFit re-derives once with consistent values.
+   * Single source of truth for every zoom change in the editor.
    */
   function applyZoomAt(newZ: number, cssX: number, cssY: number): void {
     if (!fit || !dispFit) return;
     const z = clampZoom(newZ);
-    // Image-space point at the cursor BEFORE zoom.
     const imgX = (cssX - dispFit.cssX0) / dispFit.scale;
     const imgY = (cssY - dispFit.cssY0) / dispFit.scale;
     // New pan so that (imgX, imgY) is again at (cssX, cssY) after zoom.
     //   cssX = viewW/2 + newPan.x - fit.w*z/2 + imgX * fit.scaleCss * z
     const newPanX = cssX - viewW / 2 + (fit.w * z) / 2 - imgX * fit.scaleCss * z;
     const newPanY = cssY - viewH / 2 + (fit.h * z) / 2 - imgY * fit.scaleCss * z;
-    prevZoom = z;
     pan = z <= 1 ? { x: 0, y: 0 } : clampPan({ x: newPanX, y: newPanY });
     ui.zoom = z <= 1 ? 'fit' : z;
   }
 
+  // Expose tool-rail / keyboard actions. They anchor on the viewport
+  // centre — same applyZoomAt code path as wheel/pinch.
+  $effect(() => {
+    stageController.zoomIn = () => applyZoomAt(currentZoom() * 1.25, viewW / 2, viewH / 2);
+    stageController.zoomOut = () => applyZoomAt(currentZoom() / 1.25, viewW / 2, viewH / 2);
+    stageController.zoomFit = () => applyZoomAt(1, viewW / 2, viewH / 2);
+  });
+
   // Wheel zoom (desktop). passive: false so we can preventDefault and stop
-  // the page from scrolling under us.
+  // the page from scrolling under us. We read doc.image directly (not the
+  // `ready` $derived) because $derived access from non-reactive callbacks
+  // can be flaky depending on Svelte 5 runtime tracking state.
   $effect(() => {
     if (!viewport) return;
     const vp = viewport;
     const onWheel = (e: WheelEvent) => {
-      if (!ready) return;
+      if (!doc.image) return;
       e.preventDefault();
       const r = vp.getBoundingClientRect();
       const cssX = e.clientX - r.left;
@@ -341,7 +340,6 @@
     const z = clampZoom(pinch.startZoom * (dist / pinch.startDist));
     const newPanX = midCss.x - viewW / 2 + (fit.w * z) / 2 - pinch.midImg.x * fit.scaleCss * z;
     const newPanY = midCss.y - viewH / 2 + (fit.h * z) / 2 - pinch.midImg.y * fit.scaleCss * z;
-    prevZoom = z;
     pan = z <= 1 ? { x: 0, y: 0 } : clampPan({ x: newPanX, y: newPanY });
     ui.zoom = z <= 1 ? 'fit' : z;
   }
