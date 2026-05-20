@@ -103,9 +103,14 @@
   });
 
   // Animation clock — advances t while playing.
+  //
+  // Gated on !playback.exporting so the live preview's rAF + WebGL render
+  // doesn't fight the export pipeline for the GPU while a PNG/MP4 is being
+  // produced. The export modal covers the preview anyway, so freezing it
+  // is invisible to the user and frees the GPU for the export renderer.
   const MAX_DT = 1 / 30;
   $effect(() => {
-    if (!playback.playing) return;
+    if (!playback.playing || playback.exporting) return;
     let raf = 0;
     let last = performance.now();
     const tick = (now: number) => {

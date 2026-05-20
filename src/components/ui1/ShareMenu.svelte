@@ -55,6 +55,7 @@
     open = false;
     progress = { kind: 'image', fraction: 0 };
     cancelFlag = { cancelled: false };
+    playback.exporting = true;
     try {
       await exportPng(doc.image, doc.rect, doc.crop, {
         filename: basename('.png'),
@@ -73,6 +74,7 @@
       progress = null;
       cancelFlag = null;
       busy = false;
+      playback.exporting = false;
       hideToastAfter();
     }
   }
@@ -83,6 +85,7 @@
     open = false;
     progress = { kind: 'video', fraction: 0 };
     cancelFlag = { cancelled: false };
+    playback.exporting = true;
     try {
       await exportVideo({
         imageWidth: doc.image.width,
@@ -105,6 +108,7 @@
       progress = null;
       cancelFlag = null;
       busy = false;
+      playback.exporting = false;
       hideToastAfter();
     }
   }
