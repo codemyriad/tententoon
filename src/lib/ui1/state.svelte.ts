@@ -21,11 +21,15 @@ export type Theme = 'light-neutral' | 'light-warm' | 'dark-warm';
  *   split   — image+rect side-by-side with the spiral preview (default).
  *   source  — only the source image with the rect overlay.
  *   preview — only the live tententoon spiral.
- * Both stages stay mounted in all three modes so the preview canvas
- * (and the export's renderFrame fn it owns) keep their bindings; we
- * just toggle visibility in CSS.
+ *   droste  — the regular nested-rectangle Droste effect with a smooth
+ *             self-similar zoom. While this mode is active, exports
+ *             and shares capture this animation instead of the spiral.
+ * All stages stay mounted in every mode so each one's renderFrame
+ * binding survives view switches; the inactive stages are hidden in
+ * CSS, which also short-circuits their render effects via 0×0
+ * ResizeObserver readouts.
  */
-export type ViewMode = 'split' | 'source' | 'preview';
+export type ViewMode = 'split' | 'source' | 'preview' | 'droste';
 
 export type Rect = { x: number; y: number; w: number; h: number };
 

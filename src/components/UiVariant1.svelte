@@ -18,6 +18,7 @@
   import ToolRail from './ui1/ToolRail.svelte';
   import CanvasStage from './ui1/CanvasStage.svelte';
   import PreviewStage from './ui1/PreviewStage.svelte';
+  import DrosteStage from './ui1/DrosteStage.svelte';
   import Timeline from './ui1/Timeline.svelte';
   import DropZone from './ui1/DropZone.svelte';
   import {
@@ -27,11 +28,20 @@
   import { phase } from '../lib/ui1/render';
 
   // Plumbing the live canvas + a render-frame fn up to the export menu in
-  // the top bar. Both are set by CanvasStage when it mounts.
+  // the top bar.
+  //
+  // Two render-frame bindings — one from the spiral (PreviewStage), one
+  // from the regular Droste (DrosteStage). The view the user is *looking
+  // at* is what they expect to export, so the active binding is selected
+  // by ui.view at the moment Export/Share fires. Both stages stay mounted
+  // (their bindings persist across view switches), so flipping between
+  // them is just a $derived pick.
   let canvas = $state<HTMLCanvasElement | null>(null);
-  let renderFrame = $state<(off: HTMLCanvasElement, t: number) => Promise<void>>(
-    async () => {}
-  );
+  const noopRender: (off: HTMLCanvasElement, t: number) => Promise<void> =
+    async () => {};
+  let previewRenderFrame = $state<(off: HTMLCanvasElement, t: number) => Promise<void>>(noopRender);
+  let drosteRenderFrame = $state<(off: HTMLCanvasElement, t: number) => Promise<void>>(noopRender);
+  const renderFrame = $derived(ui.view === 'droste' ? drosteRenderFrame : previewRenderFrame);
 
   // Keyboard shortcuts (HANDOFF §8): Space, [, ], ⌘E, Esc, arrows.
   function onKey(e: KeyboardEvent) {
@@ -99,8 +109,9 @@
           <CanvasStage />
           <PreviewStage
             bindCanvas={(c) => (canvas = c)}
-            bindRenderFrame={(fn) => (renderFrame = fn)}
+            bindRenderFrame={(fn) => (previewRenderFrame = fn)}
           />
+          <DrosteStage bindRenderFrame={(fn) => (drosteRenderFrame = fn)} />
         </div>
         <Timeline />
       </div>
@@ -153,10 +164,16 @@
     min-height: 0;
   }
   /* View-mode visibility. CanvasStage renders as <section class="stage">,
-     PreviewStage as <section class="preview"> — hide the unwanted one
-     by tag-class. */
+     PreviewStage as <section class="preview">, DrosteStage as
+     <section class="droste"> — hide the inactive ones by tag-class.
+     `split` keeps the editor canvas + spiral; `source` is editor-only;
+     `preview` is spiral-only; `droste` is regular-Droste-only. */
+  .stages :global(.droste) { display: none; }
   .stages.view-source :global(.preview) { display: none; }
   .stages.view-preview :global(.stage) { display: none; }
+  .stages.view-droste :global(.stage),
+  .stages.view-droste :global(.preview) { display: none; }
+  .stages.view-droste :global(.droste) { display: flex; }
   /* Stack the split view vertically only when the viewport is *both*
      narrow AND portrait — phones in landscape have horizontal room
      and side-by-side reads fine there. Stacking on a 844×390 phone

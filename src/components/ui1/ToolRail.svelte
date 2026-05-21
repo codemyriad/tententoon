@@ -35,11 +35,20 @@
   <button
     class="tool"
     class:active={ui.view === 'preview'}
-    title="Tententoon only (the spiral preview)"
-    aria-label="Tententoon only"
+    title="tententoon"
+    aria-label="tententoon"
     onclick={() => setView('preview')}
   >
     <Icon name="viewPreview" />
+  </button>
+  <button
+    class="tool"
+    class:active={ui.view === 'droste'}
+    title="droste"
+    aria-label="droste"
+    onclick={() => setView('droste')}
+  >
+    <Icon name="viewDroste" />
   </button>
   <div class="spacer"></div>
   <!-- Self-hides on browsers without navigator.canShare for files. -->

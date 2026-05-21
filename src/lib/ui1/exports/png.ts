@@ -19,6 +19,19 @@ export type PngExportOptions = {
   watermark?: string;
   /** Default 'download'. 'share' hands the blob to navigator.share. */
   output?: 'download' | 'share';
+  /**
+   * Optional alternative single-frame renderer. When provided, the
+   * spiral CPU pipeline is bypassed entirely — exportPng allocates a
+   * canvas, calls renderFrame on it, watermarks, and saves. Used by
+   * the Droste view so its on-screen animation is what gets saved
+   * instead of the tententoon spiral. The caller is responsible for
+   * applying playback.direction; t is passed through raw.
+   */
+  renderFrame?: (canvas: HTMLCanvasElement, t: number) => Promise<void> | void;
+  /** Output canvas size when using renderFrame. Defaults to image size. */
+  outputSize?: { w: number; h: number };
+  /** t to render at when using renderFrame. Defaults to 0. */
+  t?: number;
 };
 
 export async function exportPng(
@@ -32,8 +45,36 @@ export async function exportPng(
     onProgress,
     signal,
     watermark,
-    output = 'download'
+    output = 'download',
+    renderFrame,
+    outputSize,
+    t = 0
   } = opts;
+
+  // External-renderer path (Droste view). Single render call, then
+  // watermark + save — no chunking required, since the Droste renderer
+  // is a handful of ctx.drawImage calls.
+  if (renderFrame) {
+    const w = Math.max(1, Math.round(outputSize?.w ?? image.width));
+    const h = Math.max(1, Math.round(outputSize?.h ?? image.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    onProgress?.(0);
+    await renderFrame(canvas, t);
+    if (signal?.cancelled) throw new Error('cancelled');
+    onProgress?.(1);
+    if (watermark) drawWatermark(canvas, watermark);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('toBlob returned null');
+    if (output === 'share') {
+      await shareBlob(blob, filename, 'image/png');
+    } else {
+      downloadBlob(blob, filename);
+    }
+    return;
+  }
+
   if (rect.w <= 0 || rect.h <= 0 || crop.w <= 0 || crop.h <= 0) {
     throw new Error('No valid rect');
   }

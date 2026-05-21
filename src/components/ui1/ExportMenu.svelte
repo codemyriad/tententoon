@@ -8,6 +8,11 @@
   // a given progress t ∈ [0,1)). The MP4 export now drives a hidden
   // canvas with this fn — the live preview is no longer captured, so the
   // user can scrub / click during a recording without corrupting it.
+  //
+  // The renderFrame reflects the active view (spiral or droste), so the
+  // PNG and video paths both honour what the user is looking at. The
+  // spiral CPU pipeline only runs when ui.view is one of the tententoon
+  // modes; on droste view PNG export forwards renderFrame to png.ts.
   type Props = {
     canvas: HTMLCanvasElement | null;
     renderFrame: (off: HTMLCanvasElement, t: number) => Promise<void> | void;
@@ -29,11 +34,19 @@
     progress = { kind: 'image', fraction: 0 };
     cancelFlag = { cancelled: false };
     playback.exporting = true;
+    const useDroste = ui.view === 'droste';
     try {
       await exportPng(doc.image, doc.rect, doc.crop, {
         filename: basename('.png'),
         signal: cancelFlag,
-        onProgress: (f) => { progress = { kind: 'image', fraction: f }; }
+        onProgress: (f) => { progress = { kind: 'image', fraction: f }; },
+        ...(useDroste
+          ? {
+              renderFrame,
+              t: playback.t,
+              outputSize: { w: doc.image.width, h: doc.image.height }
+            }
+          : {})
       });
       ui.exportToast = 'Image saved.';
     } catch (e) {
@@ -83,7 +96,11 @@
   }
 
   function basename(ext: string): string {
-    const stem = doc.imageName ? doc.imageName.replace(/\.[^.]+$/, '') : 'tententoon';
+    // Name the file after the active view (the kind of thing being
+    // saved) rather than the source image. Keeps PNG/MP4 from inheriting
+    // the original photograph's filename, which was misleading once the
+    // output is a derived artefact, and self-labels the view.
+    const stem = ui.view === 'droste' ? 'droste' : 'tententoon';
     return stem + ext;
   }
 

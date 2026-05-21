@@ -41,7 +41,8 @@
   function close() { open = false; }
 
   function basename(ext: string): string {
-    const stem = doc.imageName ? doc.imageName.replace(/\.[^.]+$/, '') : 'tententoon';
+    // See ExportMenu: name the file after the view, not the source image.
+    const stem = ui.view === 'droste' ? 'droste' : 'tententoon';
     return stem + ext;
   }
 
@@ -56,13 +57,21 @@
     progress = { kind: 'image', fraction: 0 };
     cancelFlag = { cancelled: false };
     playback.exporting = true;
+    const useDroste = ui.view === 'droste';
     try {
       await exportPng(doc.image, doc.rect, doc.crop, {
         filename: basename('.png'),
         signal: cancelFlag,
         onProgress: (f) => { progress = { kind: 'image', fraction: f }; },
         watermark: WATERMARK_TEXT,
-        output: 'share'
+        output: 'share',
+        ...(useDroste
+          ? {
+              renderFrame,
+              t: playback.t,
+              outputSize: { w: doc.image.width, h: doc.image.height }
+            }
+          : {})
       });
       ui.exportToast = 'Shared.';
     } catch (e) {
