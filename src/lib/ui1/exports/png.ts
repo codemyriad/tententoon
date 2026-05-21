@@ -5,8 +5,10 @@
  */
 
 import { CpuEscherZoomRenderer } from '../../render/escher-zoom/cpu';
+import { WebGL2EscherZoomRenderer } from '../../render/escher-zoom/webgl2';
+import type { EscherZoomInput } from '../../render/escher-zoom/input';
 import { buildRenderInputs, extractPixels } from '../render';
-import { drawWatermark, shareBlob } from './share';
+import { drawWatermark } from './share';
 
 export type Rect = { x: number; y: number; w: number; h: number };
 
@@ -17,8 +19,13 @@ export type PngExportOptions = {
   signal?: { cancelled: boolean };
   /** When set, stamped bottom-right after the spiral renders. */
   watermark?: string;
-  /** Default 'download'. 'share' hands the blob to navigator.share. */
-  output?: 'download' | 'share';
+  /**
+   * 'download' triggers an <a download> click.
+   * 'blob' returns the rendered blob without saving — caller is
+   * responsible for sharing/saving it (used by the share flow so the
+   * blob can be handed to navigator.share inside a fresh user gesture).
+   */
+  output?: 'download' | 'blob';
   /**
    * Optional alternative single-frame renderer. When provided, the
    * spiral CPU pipeline is bypassed entirely — exportPng allocates a
@@ -39,7 +46,7 @@ export async function exportPng(
   rect: Rect,
   crop: Rect,
   opts: PngExportOptions = {}
-): Promise<void> {
+): Promise<Blob | void> {
   const {
     filename = 'tententoon.png',
     onProgress,
@@ -67,11 +74,8 @@ export async function exportPng(
     if (watermark) drawWatermark(canvas, watermark);
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
     if (!blob) throw new Error('toBlob returned null');
-    if (output === 'share') {
-      await shareBlob(blob, filename, 'image/png');
-    } else {
-      downloadBlob(blob, filename);
-    }
+    if (output === 'blob') return blob;
+    downloadBlob(blob, filename);
     return;
   }
 
@@ -84,34 +88,66 @@ export async function exportPng(
   // Rounded to integer pixels for the canvas/blob.
   const outW = Math.max(1, Math.round(crop.w));
   const outH = Math.max(1, Math.round(crop.h));
-  const canvas = document.createElement('canvas');
-  canvas.width = outW;
-  canvas.height = outH;
   const pixels = extractPixels(image);
   const inputs = buildRenderInputs(pixels, rect, crop, outW, outH);
   if (!inputs) throw new Error('No valid rect');
 
-  // Direct-construct the CPU renderer (bypassing the tier picker) — the
-  // GPU worker tier wants its own canvas via transferControlToOffscreen,
-  // which is a one-time op and would conflict with the live preview.
-  // Chunked render keeps the main thread responsive: a single sync render
-  // on a 1280×960 image freezes the UI for ~hundreds of ms.
-  const renderer = new CpuEscherZoomRenderer();
-  renderer.init(canvas);
-  await renderer.renderProgressive(inputs, { onProgress, signal });
-  renderer.dispose();
-
-  if (signal?.cancelled) throw new Error('cancelled');
+  // Try the GPU first — it draws a single fullscreen quad and finishes in
+  // a few ms even on multi-megapixel canvases. The live preview uses the
+  // same renderer, which is why playback is smooth; the CPU progressive
+  // path here was only the legacy default. Falls back to chunked CPU
+  // render on any GPU failure (no WebGL2, context creation refused, etc.).
+  let canvas = tryRenderGpu(inputs, outW, outH);
+  if (canvas) {
+    onProgress?.(1);
+  } else {
+    canvas = document.createElement('canvas');
+    canvas.width = outW;
+    canvas.height = outH;
+    const renderer = new CpuEscherZoomRenderer();
+    renderer.init(canvas);
+    await renderer.renderProgressive(inputs, { onProgress, signal });
+    renderer.dispose();
+    if (signal?.cancelled) throw new Error('cancelled');
+  }
 
   if (watermark) drawWatermark(canvas, watermark);
 
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+  const blob = await new Promise<Blob | null>((resolve) => canvas!.toBlob(resolve, 'image/png'));
   if (!blob) throw new Error('toBlob returned null');
   onProgress?.(1);
-  if (output === 'share') {
-    await shareBlob(blob, filename, 'image/png');
-  } else {
-    downloadBlob(blob, filename);
+  if (output === 'blob') return blob;
+  downloadBlob(blob, filename);
+}
+
+/**
+ * Render one frame on a fresh WebGL2 context, then composite the result
+ * onto a 2D canvas so the caller can watermark and toBlob normally.
+ * Returns null if WebGL2 isn't available or fails — caller should fall
+ * back to the CPU renderer. The intermediate WebGL2 canvas is discarded;
+ * only the 2D copy is returned.
+ */
+function tryRenderGpu(input: EscherZoomInput, outW: number, outH: number): HTMLCanvasElement | null {
+  let glCanvas: HTMLCanvasElement | null = null;
+  let renderer: WebGL2EscherZoomRenderer | null = null;
+  try {
+    glCanvas = document.createElement('canvas');
+    glCanvas.width = outW;
+    glCanvas.height = outH;
+    renderer = new WebGL2EscherZoomRenderer({ preserveDrawingBuffer: true });
+    renderer.init(glCanvas);
+    renderer.render(input);
+    const out = document.createElement('canvas');
+    out.width = outW;
+    out.height = outH;
+    const ctx = out.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(glCanvas, 0, 0);
+    return out;
+  } catch {
+    return null;
+  } finally {
+    renderer?.dispose();
   }
 }
 

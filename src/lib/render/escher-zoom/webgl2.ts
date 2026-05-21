@@ -25,6 +25,13 @@ import type { EscherZoomInput, EscherZoomRenderer } from './input';
 export type WebGL2Options = {
   /** Called when `webglcontextlost` fires. Caller should demote to CPU. */
   onContextLost?: () => void;
+  /**
+   * Keep the drawing buffer intact across composition. Needed when the
+   * caller wants to read pixels / drawImage off the canvas after render
+   * (e.g. PNG export). Off by default — the live preview repaints every
+   * frame so there's nothing to preserve.
+   */
+  preserveDrawingBuffer?: boolean;
 };
 
 export class WebGL2EscherZoomRenderer implements EscherZoomRenderer {
@@ -44,7 +51,7 @@ export class WebGL2EscherZoomRenderer implements EscherZoomRenderer {
     this.canvas = canvas;
     const gl = canvas.getContext('webgl2', {
       antialias: false,
-      preserveDrawingBuffer: false,
+      preserveDrawingBuffer: this.opts.preserveDrawingBuffer ?? false,
       premultipliedAlpha: false
     }) as WebGL2RenderingContext | null;
     if (!gl) throw new Error('webgl2 context unavailable');

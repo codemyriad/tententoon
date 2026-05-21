@@ -198,6 +198,7 @@
   @media (max-width: 720px) {
     .sheet {
       width: calc(100vw - 16px);
+      width: calc(100dvw - 16px);
       max-height: calc(100dvh - 32px);
       border-radius: 12px;
     }

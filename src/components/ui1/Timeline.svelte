@@ -6,7 +6,6 @@
    * left to right:
    *
    *   [ZOOM in/out segmented] · [▶ time scrubber] · [LENGTH slider]
-   *   · [SPEED 0.5×/1×/2×/4× segmented]
    *
    * Groups are visually separated by a 1px left divider so the bar has
    * rhythm without nested boxes. Disabled state hangs off `enabled`
@@ -28,7 +27,6 @@
   }
 
   function setDirection(d: Direction) { if (enabled) playback.direction = d; }
-  function setSpeed(s: 0.5 | 1 | 2 | 4) { if (enabled) playback.speed = s; }
 
   function onTrackDown(e: PointerEvent) {
     if (!enabled) return;
@@ -56,8 +54,6 @@
 
   const progressPct = $derived(`${(playback.t * 100).toFixed(2)}%`);
   const elapsed = $derived(playback.t * playback.loopLength);
-
-  const speeds: (0.5 | 1 | 2 | 4)[] = [0.5, 1, 2, 4];
 </script>
 
 <div class="bbar">
@@ -128,20 +124,6 @@
     </span>
   </div>
 
-  <!-- SPEED (rAF multiplier) -->
-  <div class="bgroup">
-    <span class="micro mono">SPEED</span>
-    <div class="segmented" role="radiogroup" aria-label="Playback speed">
-      {#each speeds as s}
-        <button
-          class="seg"
-          class:active={playback.speed === s}
-          disabled={!enabled}
-          onclick={() => setSpeed(s)}
-        >{s}×</button>
-      {/each}
-    </div>
-  </div>
 </div>
 
 <style>
@@ -155,6 +137,7 @@
     flex-wrap: wrap;
     row-gap: 4px;
     min-height: 56px;
+    overflow: hidden;
   }
   .bgroup {
     display: flex;
@@ -181,8 +164,17 @@
     }
     .grow { flex-basis: 100%; min-width: 0; order: -1; height: 40px; }
     .micro { display: none; }
-    .dslider { width: 88px; }
+    .dslider { width: 72px; }
     .seg { padding: 3px 8px; font-size: 11px; }
+    .clock { min-width: 78px; font-size: 10px; }
+    .play-group { gap: 8px; }
+  }
+  /* Extra-narrow: hide the duration readout and compress further. */
+  @media (max-width: 400px) {
+    .dslider { width: 56px; }
+    .value { display: none; }
+    .seg { padding: 3px 6px; font-size: 10px; }
+    .bgroup { padding: 0 4px; gap: 4px; }
   }
   .micro {
     font-size: 10px;
@@ -222,7 +214,9 @@
     box-shadow: var(--shadow);
   }
   .seg:disabled { opacity: 0.5; cursor: not-allowed; }
-  @media (pointer: coarse) {
+  /* Coarse-pointer overrides only above the mobile breakpoint.
+     Below 720 px the compact sizes from the width query win. */
+  @media (pointer: coarse) and (min-width: 721px) {
     .seg { padding: 8px 12px; font-size: 13px; }
     .play { width: 40px; height: 40px; }
   }
@@ -255,6 +249,7 @@
     font-variant-numeric: tabular-nums;
     min-width: 96px;
     flex-shrink: 0;
+    white-space: nowrap;
   }
   .track {
     flex: 1;

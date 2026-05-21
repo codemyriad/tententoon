@@ -29,7 +29,7 @@ export type Theme = 'light-neutral' | 'light-warm' | 'dark-warm';
  * CSS, which also short-circuits their render effects via 0×0
  * ResizeObserver readouts.
  */
-export type ViewMode = 'split' | 'source' | 'preview' | 'droste';
+export type ViewMode = 'split' | 'preview' | 'droste';
 
 export type Rect = { x: number; y: number; w: number; h: number };
 

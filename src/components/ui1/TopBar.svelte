@@ -113,9 +113,11 @@
   />
   <div class="exp-wrap">
     <button
-      class="btn primary"
+      class="btn primary compactable"
       onclick={() => (ui.exportMenuOpen = !ui.exportMenuOpen)}
       disabled={!doc.image}
+      aria-label="Export"
+      title="Export"
     >
       <Icon name="download" size={14} /><span class="lbl">Export</span>
       <span class="caret"><Icon name="caret" size={12} /></span>
@@ -136,6 +138,9 @@
     border-bottom: 1px solid var(--border);
     position: relative;
     flex-shrink: 0;
+    /* visible so the Export dropdown (position: absolute inside .exp-wrap)
+       can render below the header instead of being clipped to it. */
+    overflow: visible;
   }
   .brand {
     display: flex;
@@ -227,11 +232,10 @@
   .caret { opacity: 0.7; margin-left: 2px; display: inline-flex; }
   .exp-wrap { position: relative; }
 
-  /* Narrow viewports: collapse to icon-only buttons so the four
-     header actions stop falling off the right edge. Phone-portrait
-     390 px viewport fits the brand chip, file name (truncated),
-     four icon buttons, and Export (label kept — it's the primary
-     action and "download" icon alone reads ambiguous). */
+  /* Narrow viewports: collapse to icon-only buttons so the header
+     actions stop falling off the right edge. Export also collapses —
+     the download icon + caret reads as "export menu" once the row is
+     all icons. */
   @media (max-width: 720px) {
     .top { gap: 6px; padding: 8px 10px; }
     .div { display: none; }
@@ -255,9 +259,11 @@
       flex-wrap: wrap;
       align-items: center;
       padding: 6px 8px;
+      overflow: visible;
     }
     .grow { flex-basis: 100%; height: 0; }
     .fname { max-width: 200px; }
+    .file { display: none; }
   }
   /* Bigger touch targets on coarse pointers (phones / tablets).
      Apple HIG asks for 44; we land on 40 because the header bar is

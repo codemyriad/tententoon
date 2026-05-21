@@ -129,6 +129,7 @@
        or hides. Fallback for older browsers stays at vh. */
     height: 100vh;
     height: 100dvh;
+    overflow: hidden;
     background: var(--bg);
     color: var(--ink);
     font-family: 'Inter', system-ui, sans-serif;
@@ -151,6 +152,10 @@
      let the drop card hug the available width. */
   @media (max-width: 720px) {
     .empty { padding: 16px; }
+    /* Flip the body to column so the ToolRail (now a horizontal bar)
+       sits below the canvas. order: 1 pushes it under .canvas-col. */
+    .body { flex-direction: column; }
+    .body > :global(nav) { order: 1; }
   }
   .canvas-col {
     flex: 1;
@@ -166,10 +171,9 @@
   /* View-mode visibility. CanvasStage renders as <section class="stage">,
      PreviewStage as <section class="preview">, DrosteStage as
      <section class="droste"> — hide the inactive ones by tag-class.
-     `split` keeps the editor canvas + spiral; `source` is editor-only;
-     `preview` is spiral-only; `droste` is regular-Droste-only. */
+     `split` keeps the editor canvas + spiral; `preview` is spiral-only;
+     `droste` is regular-Droste-only. */
   .stages :global(.droste) { display: none; }
-  .stages.view-source :global(.preview) { display: none; }
   .stages.view-preview :global(.stage) { display: none; }
   .stages.view-droste :global(.stage),
   .stages.view-droste :global(.preview) { display: none; }

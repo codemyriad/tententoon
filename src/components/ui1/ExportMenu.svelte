@@ -191,6 +191,21 @@
     padding: 6px;
     z-index: 10;
   }
+  /* Phones: convert the dropdown to a bottom sheet. */
+  @media (max-width: 720px) {
+    .menu {
+      position: fixed;
+      top: auto;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      min-width: unset;
+      margin-top: 0;
+      border-radius: 14px 14px 0 0;
+      padding: 10px 12px;
+      box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.25);
+    }
+  }
   .header {
     font-family: var(--font-mono);
     font-size: 10px;
@@ -244,7 +259,7 @@
     border-radius: 12px;
     box-shadow: var(--shadow);
     padding: 20px 22px;
-    min-width: 320px;
+    min-width: min(320px, calc(100vw - 32px));
     display: flex;
     flex-direction: column;
     gap: 12px;

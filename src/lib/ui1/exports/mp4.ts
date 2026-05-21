@@ -18,7 +18,7 @@
  *   3. video/webm              (fallback)
  */
 
-import { drawWatermark, shareBlob } from './share';
+import { drawWatermark } from './share';
 
 const CANDIDATES = [
   'video/mp4;codecs=avc1',
@@ -42,8 +42,13 @@ export type VideoExportInputs = {
   signal?: { cancelled: boolean };
   /** When set, stamped bottom-right of every frame after renderFrame draws. */
   watermark?: string;
-  /** Default 'download'. 'share' hands the blob to navigator.share. */
-  output?: 'download' | 'share';
+  /**
+   * 'download' triggers an <a download> click.
+   * 'blob' returns the rendered blob (and mime/ext) without saving — caller
+   * is responsible for sharing/saving it (used by the share flow so the
+   * blob can be handed to navigator.share inside a fresh user gesture).
+   */
+  output?: 'download' | 'blob';
 };
 
 export function pickMimeType(): { type: string; ext: VideoExtension } | null {
@@ -66,7 +71,7 @@ export async function exportVideo({
   signal,
   watermark,
   output = 'download'
-}: VideoExportInputs): Promise<{ ext: VideoExtension }> {
+}: VideoExportInputs): Promise<{ ext: VideoExtension; blob?: Blob; mime?: string }> {
   const mime = pickMimeType();
   if (!mime) throw new Error('No supported video MIME type for MediaRecorder.');
 
@@ -139,12 +144,12 @@ export async function exportVideo({
     rec.stop();
     const blob = await stopped;
     const filename = `${filenameBase}.${mime.ext}`;
-    if (output === 'share') {
-      await shareBlob(blob, filename, mime.type.split(';')[0]);
-    } else {
-      downloadBlob(blob, filename);
-    }
+    const baseMime = mime.type.split(';')[0];
     onProgress?.({ fraction: 1, done: true });
+    if (output === 'blob') {
+      return { ext: mime.ext, blob, mime: baseMime };
+    }
+    downloadBlob(blob, filename);
     return { ext: mime.ext };
   } finally {
     canvas.remove();

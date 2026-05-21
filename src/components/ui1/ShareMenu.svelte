@@ -15,7 +15,7 @@
   import { ui, doc, playback } from '../../lib/ui1/state.svelte';
   import { exportPng } from '../../lib/ui1/exports/png';
   import { exportVideo } from '../../lib/ui1/exports/mp4';
-  import { shareCapability, WATERMARK_TEXT } from '../../lib/ui1/exports/share';
+  import { shareBlob, shareCapability, WATERMARK_TEXT } from '../../lib/ui1/exports/share';
 
   type Props = {
     renderFrame: (off: HTMLCanvasElement, t: number) => Promise<void> | void;
@@ -36,6 +36,17 @@
   type ProgressKind = 'image' | 'video';
   let progress = $state<{ kind: ProgressKind; fraction: number } | null>(null);
   let cancelFlag: { cancelled: boolean } | null = null;
+  // After a successful render, the blob waits here for the user to tap
+  // "Share now". navigator.share has to be called inside a *fresh* user
+  // gesture — calling it directly after a multi-second render fails with
+  // "Must be handling a user gesture to perform a share request" because
+  // the original tap's transient activation has expired.
+  let pendingShare = $state<{
+    kind: ProgressKind;
+    blob: Blob;
+    filename: string;
+    mime: string;
+  } | null>(null);
 
   function toggle() { open = !open; }
   function close() { open = false; }
@@ -58,13 +69,14 @@
     cancelFlag = { cancelled: false };
     playback.exporting = true;
     const useDroste = ui.view === 'droste';
+    const filename = basename('.png');
     try {
-      await exportPng(doc.image, doc.rect, doc.crop, {
-        filename: basename('.png'),
+      const blob = await exportPng(doc.image, doc.rect, doc.crop, {
+        filename,
         signal: cancelFlag,
         onProgress: (f) => { progress = { kind: 'image', fraction: f }; },
         watermark: WATERMARK_TEXT,
-        output: 'share',
+        output: 'blob',
         ...(useDroste
           ? {
               renderFrame,
@@ -73,18 +85,19 @@
             }
           : {})
       });
-      ui.exportToast = 'Shared.';
+      if (!blob) throw new Error('No blob produced');
+      pendingShare = { kind: 'image', blob, filename, mime: 'image/png' };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       ui.exportToast = msg === 'cancelled'
         ? 'Share cancelled.'
         : `Share failed: ${msg}`;
+      hideToastAfter();
     } finally {
       progress = null;
       cancelFlag = null;
       busy = false;
       playback.exporting = false;
-      hideToastAfter();
     }
   }
 
@@ -96,7 +109,7 @@
     cancelFlag = { cancelled: false };
     playback.exporting = true;
     try {
-      await exportVideo({
+      const { blob, ext, mime } = await exportVideo({
         imageWidth: doc.image.width,
         imageHeight: doc.image.height,
         loopSeconds: playback.loopLength,
@@ -105,8 +118,32 @@
         signal: cancelFlag,
         onProgress: (p) => { progress = { kind: 'video', fraction: p.fraction }; },
         watermark: WATERMARK_TEXT,
-        output: 'share'
+        output: 'blob'
       });
+      if (!blob || !mime) throw new Error('No blob produced');
+      pendingShare = { kind: 'video', blob, filename: `${basename('')}.${ext}`, mime };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      ui.exportToast = msg === 'cancelled'
+        ? 'Share cancelled.'
+        : `Share failed: ${msg}`;
+      hideToastAfter();
+    } finally {
+      progress = null;
+      cancelFlag = null;
+      busy = false;
+      playback.exporting = false;
+    }
+  }
+
+  async function commitShare() {
+    if (!pendingShare) return;
+    const { blob, filename, mime } = pendingShare;
+    try {
+      // Synchronous call into navigator.share so the click's transient
+      // activation is still live. shareBlob awaits internally but the
+      // gesture has already been consumed by share().
+      await shareBlob(blob, filename, mime);
       ui.exportToast = 'Shared.';
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -114,12 +151,13 @@
         ? 'Share cancelled.'
         : `Share failed: ${msg}`;
     } finally {
-      progress = null;
-      cancelFlag = null;
-      busy = false;
-      playback.exporting = false;
+      pendingShare = null;
       hideToastAfter();
     }
+  }
+
+  function dismissShare() {
+    pendingShare = null;
   }
 
   function cancelExport() {
@@ -191,6 +229,25 @@
       </div>
     </div>
   {/if}
+
+  <!--
+    Ready-to-share confirmation. Required because navigator.share needs to
+    be called from a fresh user gesture — the original tap's transient
+    activation is consumed by the multi-second render. The user taps
+    "Share now" and we fire navigator.share synchronously from that click.
+  -->
+  {#if pendingShare !== null}
+    <div class="recording-mask" role="dialog" aria-modal="true" aria-label="Ready to share">
+      <div class="recording-card">
+        <div class="rec-title">{pendingShare.kind === 'video' ? 'Video' : 'Image'} ready</div>
+        <div class="rec-text">Tap “Share now” to open the share sheet.</div>
+        <div class="rec-actions">
+          <button class="rec-cancel" onclick={dismissShare}>Cancel</button>
+          <button class="rec-share" onclick={commitShare}>Share now</button>
+        </div>
+      </div>
+    </div>
+  {/if}
 {/if}
 
 <style>
@@ -235,6 +292,19 @@
     box-shadow: var(--shadow);
     padding: 6px;
     z-index: 20;
+  }
+  /* Phones: bottom sheet, same pattern as ExportMenu. */
+  @media (max-width: 720px) {
+    .menu {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      min-width: unset;
+      border-radius: 14px 14px 0 0;
+      padding: 10px 12px;
+      box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.25);
+    }
   }
   /* Click-outside dismissal. */
   .backdrop {
@@ -298,7 +368,7 @@
     border-radius: 12px;
     box-shadow: var(--shadow);
     padding: 20px 22px;
-    min-width: 280px;
+    min-width: min(280px, calc(100vw - 32px));
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -332,4 +402,21 @@
     border: 1px solid var(--border);
   }
   .rec-cancel:hover { background: var(--panel-2); color: var(--ink); }
+  .rec-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .rec-share {
+    padding: 6px 14px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    border-radius: 6px;
+    background: var(--accent);
+    color: #fff;
+    border: 1px solid var(--accent);
+    font-weight: 600;
+  }
+  .rec-share:hover { filter: brightness(1.08); }
 </style>

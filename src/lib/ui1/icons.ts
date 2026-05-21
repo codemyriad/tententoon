@@ -40,8 +40,6 @@ export const ICON = {
     '<path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/>',
   viewSplit:
     '<rect x="3" y="5" width="8" height="14" rx="1"/><rect x="13" y="5" width="8" height="14" rx="1"/>',
-  viewSource:
-    '<rect x="3" y="5" width="18" height="14" rx="1"/><rect x="7" y="9" width="9" height="7" rx="0.5"/>',
   viewPreview:
     '<rect x="3" y="3" width="18" height="18" rx="1"/><rect x="7" y="7" width="10" height="10" rx="0.5"/><rect x="10" y="10" width="4" height="4" rx="0.5"/>',
   viewDroste:

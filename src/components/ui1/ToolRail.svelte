@@ -25,15 +25,6 @@
   </button>
   <button
     class="tool"
-    class:active={ui.view === 'source'}
-    title="Image only (with the selection rectangle)"
-    aria-label="Image only"
-    onclick={() => setView('source')}
-  >
-    <Icon name="viewSource" />
-  </button>
-  <button
-    class="tool"
     class:active={ui.view === 'preview'}
     title="tententoon"
     aria-label="tententoon"
@@ -93,5 +84,21 @@
   @media (pointer: coarse) {
     .rail { width: 56px; padding: 8px 6px; }
     .tool { width: 44px; height: 44px; }
+  }
+  /* Narrow viewports: flip the rail to a horizontal bar below the canvas.
+     Recovers ~48-56 px of canvas width — big win on 360 px phones.
+     UiVariant1's .body flips to column to match. */
+  @media (max-width: 720px) {
+    .rail {
+      width: 100%;
+      flex-direction: row;
+      border-right: none;
+      border-top: 1px solid var(--border);
+      padding: 6px 8px;
+      justify-content: center;
+      gap: 6px;
+    }
+    .tool { width: 40px; height: 40px; }
+    .spacer { display: none; }
   }
 </style>
