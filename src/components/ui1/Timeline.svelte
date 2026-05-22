@@ -14,6 +14,7 @@
   import Icon from './Icon.svelte';
   import { playback, type Direction } from '../../lib/ui1/state.svelte';
   import { phase } from '../../lib/ui1/render';
+  import { markGestureEnd } from '../../lib/ui1/tententoon.svelte';
 
   let trackEl: HTMLDivElement;
   let scrubbing = false;
@@ -24,9 +25,14 @@
   function toggle() {
     if (!enabled) return;
     playback.playing = !playback.playing;
+    markGestureEnd();
   }
 
-  function setDirection(d: Direction) { if (enabled) playback.direction = d; }
+  function setDirection(d: Direction) {
+    if (!enabled) return;
+    playback.direction = d;
+    markGestureEnd();
+  }
 
   function onTrackDown(e: PointerEvent) {
     if (!enabled) return;

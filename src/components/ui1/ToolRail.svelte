@@ -2,6 +2,7 @@
   import Icon from './Icon.svelte';
   import ShareMenu from './ShareMenu.svelte';
   import { ui, type ViewMode } from '../../lib/ui1/state.svelte';
+  import { markGestureEnd } from '../../lib/ui1/tententoon.svelte';
 
   type Props = {
     renderFrame: (off: HTMLCanvasElement, t: number) => Promise<void> | void;
@@ -10,6 +11,7 @@
 
   function setView(view: ViewMode) {
     ui.view = view;
+    markGestureEnd();
   }
 </script>
 

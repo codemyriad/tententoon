@@ -9,6 +9,8 @@
   } from '../../lib/ui1/state.svelte';
   import { loadFile } from '../../lib/ui1/file';
   import { addToHistory } from '../../lib/ui1/history.svelte';
+  import { markCreate, currentTententoon } from '../../lib/ui1/tententoon.svelte';
+  import { putBlob } from '../../lib/ui1/persistence';
 
   type Props = {
     canvas: HTMLCanvasElement | null;
@@ -36,6 +38,8 @@
     if (r.ok) {
       setImage(r.image, r.name);
       void addToHistory(file, r.image, r.name);
+      const hash = await putBlob(file);
+      markCreate({ kind: 'blob', hash });
     } else {
       ui.exportToast = r.reason;
     }
@@ -81,7 +85,7 @@
   {#if doc.image}
     <span class="file">
       <Icon name="image" size={14} />
-      <span class="fname">{doc.imageName || 'image'}</span>
+      <span class="fname">{currentTententoon.name || doc.imageName || 'image'}</span>
       <span class="dim mono">· {doc.image.width}×{doc.image.height}</span>
     </span>
   {:else}

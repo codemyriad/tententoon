@@ -27,6 +27,7 @@
   } from '../lib/ui1/state.svelte';
   import { loadHistory } from '../lib/ui1/history.svelte';
   import { phase } from '../lib/ui1/render';
+  import { markGestureEnd } from '../lib/ui1/tententoon.svelte';
 
   // Plumbing the live canvas + a render-frame fn up to the export menu in
   // the top bar.
@@ -53,6 +54,7 @@
       if (phase() === 'edit' || phase() === 'playing') {
         e.preventDefault();
         playback.playing = !playback.playing;
+        markGestureEnd();
       }
     } else if (e.key === '[') {
       playback.t = Math.max(0, playback.t - 0.02);

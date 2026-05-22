@@ -14,6 +14,8 @@
     removeFromHistory,
     type HistoryEntry
   } from '../../lib/ui1/history.svelte';
+  import { markCreate } from '../../lib/ui1/tententoon.svelte';
+  import { putBlob } from '../../lib/ui1/persistence';
 
   let open = $state(false);
   let loading = $state<string | null>(null);
@@ -28,7 +30,11 @@
     loading = entry.id;
     try {
       const r = await loadFromHistory(entry.id);
-      if (r) setImage(r.image, r.name);
+      if (r) {
+        setImage(r.image, r.name);
+        const hash = await putBlob(r.blob);
+        markCreate({ kind: 'blob', hash });
+      }
       open = false;
     } finally {
       loading = null;

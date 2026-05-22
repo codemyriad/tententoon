@@ -146,7 +146,7 @@ export async function addToHistory(blob: Blob, image: ImageBitmap, name: string)
 /** Re-decode a stored entry's blob into an ImageBitmap. */
 export async function loadFromHistory(
   id: string
-): Promise<{ image: ImageBitmap; name: string } | null> {
+): Promise<{ image: ImageBitmap; name: string; blob: Blob } | null> {
   if (!dbAvailable()) return null;
   try {
     const db = await openDb();
@@ -159,7 +159,7 @@ export async function loadFromHistory(
     db.close();
     if (!entry) return null;
     const image = await createImageBitmap(entry.blob);
-    return { image, name: entry.name };
+    return { image, name: entry.name, blob: entry.blob };
   } catch {
     return null;
   }

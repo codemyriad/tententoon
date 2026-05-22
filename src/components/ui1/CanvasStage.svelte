@@ -40,6 +40,7 @@
     type Rect
   } from '../../lib/ui1/state.svelte';
   import { snapRectToAspect, phase } from '../../lib/ui1/render';
+  import { markGestureEnd } from '../../lib/ui1/tententoon.svelte';
 
   const MAX_ZOOM = 8;
   const MIN_ZOOM = 1;
@@ -570,6 +571,7 @@
       }
       commitResize(r);
     }
+    markGestureEnd();
   }
 
   // ---- visual derived data for the overlay ----

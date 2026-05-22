@@ -3,6 +3,8 @@
   import { ui, doc, setImage, commitNewRect } from '../../lib/ui1/state.svelte';
   import { loadFile, loadUrl } from '../../lib/ui1/file';
   import { addToHistory } from '../../lib/ui1/history.svelte';
+  import { markCreate } from '../../lib/ui1/tententoon.svelte';
+  import { putBlob } from '../../lib/ui1/persistence';
   import { publicAssetUrl } from '../../lib/asset-url';
 
   let dragOver = $state(false);
@@ -16,6 +18,8 @@
     if (r.ok) {
       setImage(r.image, r.name);
       void addToHistory(file, r.image, r.name);
+      const hash = await putBlob(file);
+      markCreate({ kind: 'blob', hash });
       errorMsg = null;
     } else {
       errorMsg = r.reason;
@@ -29,13 +33,15 @@
   }
 
   async function trySample() {
-    const r = await loadUrl(publicAssetUrl('Droste_1260359-nevit.jpg'));
+    const url = publicAssetUrl('Droste_1260359-nevit.jpg');
+    const r = await loadUrl(url);
     if (r.ok) {
       setImage(r.image, r.name);
       // Tuned rect for the bundled Droste sample — lands near the
       // photograph's natural focal point so the spiral preview has a
       // sensible starting frame instead of a 0×0 rect.
       commitNewRect({ x: 340, y: 327, w: 595, h: 478 });
+      markCreate({ kind: 'url', url });
     } else {
       errorMsg = r.reason;
     }

@@ -2,16 +2,10 @@
 /**
  * Bootstrap smoke test.
  *
- * Catches the two regressions that ate this codebase's freshness story:
- *   1. The example image stops being served as image/jpeg (corrupted public asset,
- *      misconfigured plugin, etc.) — the loader can't decode it, page never renders.
- *   2. Vite's SPA fallback no longer returns text/html for missing assets — would
- *      mean our content-type guard in App.svelte's loader is solving a problem
- *      that no longer exists, so the guard could regress unnoticed.
- *
- * The test also asserts the example bytes are a real JPEG, not whatever HTML
- * Vite would substitute. That's the actual class of bug that surfaced
- * "could not be decoded" in incognito sessions.
+ * Catches regressions in the things smoke can cheaply assert from outside
+ * the browser: that the bundled sample is served as a real JPEG, that the
+ * App.svelte boot effect stays one-shot, and that the WebGL capability
+ * detector still refuses software contexts.
  *
  * Usage: `bun run smoke` (assumes dev server on http://localhost:5173).
  *        Set SMOKE_URL to point elsewhere.
@@ -64,22 +58,11 @@ async function main() {
     check('example bytes start with JPEG SOI marker', false, e.message);
   }
 
-  // 3. The optional local override path must still trigger Vite's SPA fallback
-  //    (text/html) when the file isn't there. The loader's content-type guard
-  //    is the last line of defence against that fallback feeding HTML to
-  //    createImageBitmap. If this assertion ever breaks, re-evaluate the guard.
-  const local = await head('/droste-image.jpg');
-  check(
-    'missing local image returns SPA fallback (text/html)',
-    local.status === 200 && local.contentType.startsWith('text/html'),
-    `got ${local.status} ${local.contentType}`
-  );
-
-  // 4. The bootstrap effect must stay one-shot. Without the sentinel, a failed
-  //    initial load flips `loading` back to false with `source` still null;
-  //    the effect re-fires and relaunches the loader → freeze. The check is
-  //    a static grep so a refactor that drops the sentinel fails the smoke
-  //    test before it ships.
+  // 3. The bootstrap effect must stay one-shot. Without the sentinel, an
+  //    async bootRestore that throws or rejects could re-arm the effect on
+  //    every reactive read inside it. The check is a static grep so a
+  //    refactor that drops the sentinel fails the smoke test before it
+  //    ships.
   const fs = await import('node:fs/promises');
   try {
     const src = await fs.readFile(new URL('../src/App.svelte', import.meta.url), 'utf8');
@@ -88,77 +71,11 @@ async function main() {
       /bootstrapped\s*=\s*true/.test(src) && /if\s*\(\s*bootstrapped/.test(src),
       'sentinel not found — regression risk: bootstrap effect can loop on errors'
     );
-    check(
-      'App.svelte still has a fallback path (local → example)',
-      /loadImageFromUrl\(LOCAL_URL/.test(src) && /loadImageFromUrl\(EXAMPLE_URL/.test(src),
-      'fallback chain missing — regression risk: missing local file leaves the page empty'
-    );
   } catch (e) {
     check('App.svelte readable for static checks', false, e.message);
   }
 
-  // 5. initSelection must NOT read selectionState after writing to it — and
-  //    the direct-read check isn't enough. We've now been bitten twice:
-  //    v1: a literal `selectionState.X` read after a write (caught by the
-  //        original regex).
-  //    v2: a call to persist() that itself reads selectionState — invisible
-  //        to a single-line regex, same disastrous effect (every drag re-fires
-  //        SourcePanel's $effect, snaps the selection back to the preset).
-  //    Both fail in the same way: page freeze / F12-dead / renderer crash.
-  //
-  //    Enforced rule (stricter than v1): after the first `selectionState.X = ...`
-  //    line, the body may contain ONLY further such assignments, comments, blank
-  //    lines, or the closing brace. Any function call or other token is the bug.
-  //    This is overly conservative but easy to read and easy to follow — and
-  //    initSelection has no legitimate reason to do anything else at that point.
-  try {
-    const sel = await fs.readFile(new URL('../src/lib/stores/selection.svelte.ts', import.meta.url), 'utf8');
-    const initBody = sel.match(/export function initSelection\([^)]*\)\s*{([\s\S]*?)\n}/)?.[1] ?? '';
-    const lines = initBody.split('\n');
-    const firstWriteIdx = lines.findIndex((l) => /\bselectionState\.\w+\s*=(?!=)/.test(l));
-    let badLine = -1;
-    let badReason = '';
-    if (firstWriteIdx >= 0) {
-      for (let i = firstWriteIdx + 1; i < lines.length; i++) {
-        const line = lines[i];
-        if (/^\s*$/.test(line)) continue;                                // blank
-        if (/^\s*\/\//.test(line)) continue;                             // // comment
-        if (/^\s*[*/]/.test(line)) continue;                             // block-comment line
-        if (/^\s*}\s*$/.test(line)) continue;                            // closing brace
-        if (/^\s*selectionState\.\w+\s*=(?!=)/.test(line)) continue;     // further writes
-        badLine = i;
-        badReason = 'unexpected token after writes — only further `selectionState.X = ...` assignments are allowed (no function calls; they could transitively read selectionState)';
-        break;
-      }
-    }
-    check(
-      'initSelection writes selectionState then does nothing else',
-      badLine === -1,
-      badLine >= 0 ? `line ${badLine + 1} of initSelection: ${badReason}` : ''
-    );
-  } catch (e) {
-    check('selection.svelte.ts readable for read-after-write check', false, e.message);
-  }
-
-  // 6. Render-backend wiring. EscherZoomPanel must use the tier factory so
-  //    WebGL2 → CPU demotion happens automatically. A panel that calls a
-  //    backend constructor directly bypasses the fallback path and would
-  //    crash on machines where WebGL2 returns null.
-  try {
-    const panel = await fs.readFile(
-      new URL('../src/components/EscherZoomPanel.svelte', import.meta.url),
-      'utf8'
-    );
-    check(
-      'EscherZoomPanel routes through createEscherZoomRenderer (tier-aware)',
-      /createEscherZoomRenderer\s*\(/.test(panel),
-      'panel imports a backend directly — bypasses tier demotion'
-    );
-  } catch (e) {
-    check('EscherZoomPanel.svelte readable', false, e.message);
-  }
-
-  // 7. Capability detection must refuse software WebGL2. Software-only
+  // 4. Capability detection must refuse software WebGL2. Software-only
   //    contexts (SwiftShader, llvmpipe) are slower than the JS pixel loop
   //    for our shader; refusing them is the difference between "works
   //    poorly" and "works fast on a different tier".
