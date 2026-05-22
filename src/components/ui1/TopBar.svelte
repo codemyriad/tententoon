@@ -14,8 +14,11 @@
   import {
     markCreate,
     currentTententoon,
-    renameTententoon
+    renameTententoon,
+    performUndo,
+    performRedo
   } from '../../lib/ui1/tententoon.svelte';
+  import { undoState } from '../../lib/ui1/undo.svelte';
   import { putBlob } from '../../lib/ui1/persistence';
 
   type Props = {
@@ -28,6 +31,10 @@
   let infoOpen = $state(false);
   let galleryOpen = $state(false);
   let renameOpen = $state(false);
+
+  // Reactive — read undoState deps so the buttons re-render on stack changes.
+  const undoOk = $derived(undoState.pointer > 0);
+  const redoOk = $derived(undoState.pointer >= 0 && undoState.pointer < undoState.stack.length - 1);
 
   function saveCurrentName(name: string) {
     if (currentTententoon.id) renameTententoon(currentTententoon.id, name);
@@ -135,6 +142,24 @@
     aria-label="Gallery"
   >
     <Icon name="gallery" size={14} /><span class="lbl">Gallery</span>
+  </button>
+  <button
+    class="btn ghost icon-only"
+    onclick={performUndo}
+    disabled={!undoOk}
+    title="Undo (⌘Z)"
+    aria-label="Undo"
+  >
+    <Icon name="undo" size={14} />
+  </button>
+  <button
+    class="btn ghost icon-only"
+    onclick={performRedo}
+    disabled={!redoOk}
+    title="Redo (⇧⌘Z)"
+    aria-label="Redo"
+  >
+    <Icon name="redo" size={14} />
   </button>
   <button class="btn ghost compactable" onclick={reset} disabled={!doc.image} title="Reset rectangle" aria-label="Reset rectangle">
     <Icon name="reset" size={14} /><span class="lbl">Reset</span>

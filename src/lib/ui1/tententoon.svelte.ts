@@ -15,6 +15,16 @@
 import { doc, playback, ui, setImage } from './state.svelte';
 import * as persistence from './persistence';
 import type { SourceRef, TtState, IndexEntry } from './persistence';
+import {
+  pushUndo,
+  resetUndo,
+  clearUndo,
+  isApplying,
+  canUndo,
+  canRedo,
+  undo as undoStep,
+  redo as redoStep
+} from './undo.svelte';
 
 export const currentTententoon = $state<{
   id: string | null;
@@ -51,18 +61,19 @@ export function setKnownSource(s: SourceRef | null): void {
 
 /**
  * Take a snapshot of the current editor state and write it to the
- * persistence layer under the current tententoon's id. If no current
- * tententoon exists, create one first.
+ * persistence layer under the current tententoon's id. Also pushes a
+ * new undo step — unless the write is the result of applying a
+ * historical snapshot (the undo engine sets isApplying then).
+ *
+ * No-op if there's no current tententoon yet (stray pointerup before
+ * any source load) — source loads call markCreate() explicitly.
  */
 export function markGestureEnd(): void {
   if (currentTententoon.hydrating) return;
   const state = snapshotState(knownSource);
-  if (currentTententoon.id) {
-    persistence.writeState(currentTententoon.id, state);
-  } else {
-    // No current id: don't autocreate from a stray pointerup. Source
-    // loads call markCreate() explicitly with a SourceRef.
-  }
+  if (!currentTententoon.id) return;
+  persistence.writeState(currentTententoon.id, state);
+  if (!isApplying.value) pushUndo(state);
 }
 
 /**
@@ -76,6 +87,7 @@ export function markCreate(source: SourceRef): IndexEntry {
   const entry = persistence.create(state);
   currentTententoon.id = entry.id;
   currentTententoon.name = entry.name;
+  resetUndo(state);
   return entry;
 }
 
@@ -90,6 +102,9 @@ export function markSourceLoaded(source: SourceRef): IndexEntry {
     knownSource = source;
     const state = snapshotState(source);
     persistence.writeState(currentTententoon.id, state);
+    // Filling an empty tententoon is the first "real" state — undo
+    // back to here, not to the source-less baseline.
+    resetUndo(state);
     return {
       id: currentTententoon.id,
       name: currentTententoon.name,
@@ -112,6 +127,7 @@ export function createEmpty(): IndexEntry {
   const entry = persistence.create(state, 'Untitled · ' + nowStamp());
   currentTententoon.id = entry.id;
   currentTententoon.name = entry.name;
+  resetUndo(state);
   return entry;
 }
 
@@ -139,7 +155,7 @@ export function renameTententoon(id: string, name: string): void {
 /**
  * Delete a tententoon. If it was the current one, the editor returns
  * to its empty state — image cleared, currentTententoon zeroed,
- * `tt:current` cleared by persistence.remove().
+ * `tt:current` cleared by persistence.remove(), undo stack wiped.
  */
 export function deleteTententoon(id: string): void {
   const wasCurrent = currentTententoon.id === id;
@@ -151,11 +167,33 @@ export function deleteTententoon(id: string): void {
       knownSource = null;
       currentTententoon.id = null;
       currentTententoon.name = '';
+      clearUndo();
     } finally {
       currentTententoon.hydrating = false;
     }
   }
 }
+
+/**
+ * Move one step back in the current tententoon's undo stack and apply
+ * the snapshot. Also writes the resulting state to localStorage so
+ * reload reflects the undone state (V4 doesn't persist the undo log
+ * itself — V5 does).
+ */
+export function performUndo(): void {
+  if (!canUndo() || !currentTententoon.id) return;
+  undoStep();
+  persistence.writeState(currentTententoon.id, snapshotState(knownSource));
+}
+
+/** Symmetric to performUndo. */
+export function performRedo(): void {
+  if (!canRedo() || !currentTententoon.id) return;
+  redoStep();
+  persistence.writeState(currentTententoon.id, snapshotState(knownSource));
+}
+
+export { canUndo, canRedo } from './undo.svelte';
 
 /**
  * Load a tententoon by id. Resolves the source (URL or IDB blob), calls
@@ -203,6 +241,7 @@ export async function load(id: string): Promise<boolean> {
     currentTententoon.id = entry.id;
     currentTententoon.name = entry.name;
     persistence.setCurrentId(entry.id);
+    resetUndo(state);
     return true;
   } finally {
     currentTententoon.hydrating = false;

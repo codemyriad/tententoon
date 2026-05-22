@@ -61,6 +61,10 @@ export const ICON = {
     '<path d="M4 20 L4 16 L16 4 L20 8 L8 20 Z"/><path d="M13 7 L17 11"/>',
   plus:
     '<path d="M12 5v14"/><path d="M5 12h14"/>',
+  undo:
+    '<path d="M3 7 L9 7 L9 13"/><path d="M3 7 C9 7 21 7 21 17 L21 19"/>',
+  redo:
+    '<path d="M21 7 L15 7 L15 13"/><path d="M21 7 C15 7 3 7 3 17 L3 19"/>',
   external:
     '<path d="M14 4h6v6"/><path d="M20 4L10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>'
 } as const;

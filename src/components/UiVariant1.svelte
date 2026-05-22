@@ -27,7 +27,7 @@
   } from '../lib/ui1/state.svelte';
   import { loadHistory } from '../lib/ui1/history.svelte';
   import { phase } from '../lib/ui1/render';
-  import { markGestureEnd } from '../lib/ui1/tententoon.svelte';
+  import { markGestureEnd, performUndo, performRedo } from '../lib/ui1/tententoon.svelte';
 
   // Plumbing the live canvas + a render-frame fn up to the export menu in
   // the top bar.
@@ -50,6 +50,12 @@
     const tag = (e.target as HTMLElement | null)?.tagName;
     const inField = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
     if (inField) return;
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
+      e.preventDefault();
+      if (e.shiftKey) performRedo();
+      else performUndo();
+      return;
+    }
     if (e.key === ' ') {
       if (phase() === 'edit' || phase() === 'playing') {
         e.preventDefault();
