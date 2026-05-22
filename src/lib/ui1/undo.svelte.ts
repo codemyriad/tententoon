@@ -17,13 +17,38 @@
 import { doc } from './state.svelte';
 import type { TtState } from './persistence';
 
+/**
+ * Maximum entries kept in the per-tententoon stack (and in IDB).
+ * Each snapshot is tiny — rect+crop+a handful of scalars — but a
+ * cap keeps long sessions from accumulating thousands.
+ */
+export const MAX_DEPTH = 100;
+
 export const undoState = $state<{
   stack: TtState[];
+  /** Parallel to stack — IDB seq numbers. Used to identify which rows to truncate / trim. */
+  seqs: number[];
   pointer: number;
 }>({
   stack: [],
+  seqs: [],
   pointer: -1
 });
+
+/**
+ * Outcome of a pushUndo call. Tells the persistence orchestration
+ * which seqs to write, drop from the redo tail (after an undo +
+ * fresh edit), and drop from the head (depth cap). When `pushed`
+ * is false, nothing changed and no IDB writes are needed.
+ */
+export type PushResult =
+  | { pushed: false }
+  | {
+      pushed: true;
+      newSeq: number;
+      droppedFromTail: number[];
+      droppedFromHead: number[];
+    };
 
 /**
  * Suppresses pushUndo while a snapshot is being applied. Read by
@@ -42,12 +67,41 @@ export function canRedo(): boolean {
 /** Reset the stack to a single-entry baseline. Called on tententoon switch. */
 export function resetUndo(baseline: TtState): void {
   undoState.stack = [cloneState(baseline)];
+  undoState.seqs = [0];
   undoState.pointer = 0;
+}
+
+/**
+ * Hydrate from a persisted undo log (IDB rows ordered by seq) and
+ * position the pointer to match the current on-disk state. If no
+ * row matches, fall back to the head — undo from the head still
+ * works (walks back through history) at the cost of "redo" being
+ * unavailable until the user makes a new edit.
+ */
+export function hydrateUndo(
+  rows: { seq: number; state: TtState }[],
+  currentState: TtState
+): void {
+  if (rows.length === 0) {
+    resetUndo(currentState);
+    return;
+  }
+  undoState.stack = rows.map((r) => cloneState(r.state));
+  undoState.seqs = rows.map((r) => r.seq);
+  let matchIdx = -1;
+  for (let i = undoState.stack.length - 1; i >= 0; i--) {
+    if (rectsEqual(undoState.stack[i], currentState)) {
+      matchIdx = i;
+      break;
+    }
+  }
+  undoState.pointer = matchIdx >= 0 ? matchIdx : undoState.stack.length - 1;
 }
 
 /** Clear the stack entirely. Used when the editor returns to its empty state. */
 export function clearUndo(): void {
   undoState.stack = [];
+  undoState.seqs = [];
   undoState.pointer = -1;
 }
 
@@ -59,18 +113,41 @@ export function clearUndo(): void {
  *
  * If the pointer was anywhere but the head (user had undone some
  * steps), the redo tail is dropped before the append — once a new
- * edit lands, the alternate future is gone (R13).
+ * edit lands, the alternate future is gone (R13). Enforces MAX_DEPTH
+ * by shifting from the head.
+ *
+ * Returns the IDB sync hints — which seqs to write, drop from tail,
+ * and drop from head — so the persistence orchestration can mirror
+ * the in-memory state to IDB without re-walking the stack.
  */
-export function pushUndo(next: TtState): void {
-  if (isApplying.value) return;
+export function pushUndo(next: TtState): PushResult {
+  if (isApplying.value) return { pushed: false };
   const head = undoState.stack[undoState.stack.length - 1];
-  if (head && rectsEqual(head, next)) return;
-  // Drop the redo tail if we're not at the head.
+  if (head && rectsEqual(head, next)) return { pushed: false };
+
+  let droppedFromTail: number[] = [];
   if (undoState.pointer < undoState.stack.length - 1) {
-    undoState.stack = undoState.stack.slice(0, undoState.pointer + 1);
+    const cut = undoState.pointer + 1;
+    droppedFromTail = undoState.seqs.slice(cut);
+    undoState.stack = undoState.stack.slice(0, cut);
+    undoState.seqs = undoState.seqs.slice(0, cut);
   }
+
+  const newSeq =
+    undoState.seqs.length > 0 ? undoState.seqs[undoState.seqs.length - 1] + 1 : 0;
   undoState.stack = [...undoState.stack, cloneState(next)];
+  undoState.seqs = [...undoState.seqs, newSeq];
   undoState.pointer = undoState.stack.length - 1;
+
+  const droppedFromHead: number[] = [];
+  while (undoState.stack.length > MAX_DEPTH) {
+    droppedFromHead.push(undoState.seqs[0]);
+    undoState.stack = undoState.stack.slice(1);
+    undoState.seqs = undoState.seqs.slice(1);
+    undoState.pointer -= 1;
+  }
+
+  return { pushed: true, newSeq, droppedFromTail, droppedFromHead };
 }
 
 /** Move pointer back one step and apply the snapshot. No-op if can't. */

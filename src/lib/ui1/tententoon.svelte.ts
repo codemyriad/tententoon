@@ -18,6 +18,7 @@ import type { SourceRef, TtState, IndexEntry } from './persistence';
 import {
   pushUndo,
   resetUndo,
+  hydrateUndo,
   clearUndo,
   isApplying,
   canUndo,
@@ -25,6 +26,7 @@ import {
   undo as undoStep,
   redo as redoStep
 } from './undo.svelte';
+import { scheduleThumb, dropThumb } from './thumb.svelte';
 
 export const currentTententoon = $state<{
   id: string | null;
@@ -72,8 +74,24 @@ export function markGestureEnd(): void {
   if (currentTententoon.hydrating) return;
   const state = snapshotState(knownSource);
   if (!currentTententoon.id) return;
-  persistence.writeState(currentTententoon.id, state);
-  if (!isApplying.value) pushUndo(state);
+  const id = currentTententoon.id;
+  persistence.writeState(id, state);
+  if (isApplying.value) return;
+  const r = pushUndo(state);
+  if (!r.pushed) return;
+  // Mirror the in-memory mutation to IDB so undo survives reload.
+  // Awaited fire-and-forget — local writes are fast and ordering with
+  // the next gesture-end is naturally serial via the IDB transactions.
+  void persistence.appendUndo(id, r.newSeq, state);
+  if (r.droppedFromTail.length > 0) {
+    void persistence.truncateRedoTail(id, r.droppedFromTail[0]);
+  }
+  if (r.droppedFromHead.length > 0) {
+    const lastDropped = r.droppedFromHead[r.droppedFromHead.length - 1];
+    void persistence.trimUndo(id, lastDropped + 1);
+  }
+  // Fire-and-forget thumbnail capture, scheduled on idle.
+  scheduleThumb(id);
 }
 
 /**
@@ -88,6 +106,9 @@ export function markCreate(source: SourceRef): IndexEntry {
   currentTententoon.id = entry.id;
   currentTententoon.name = entry.name;
   resetUndo(state);
+  // Persist the baseline so reload can hydrate the stack even before
+  // the user makes any edits.
+  void persistence.appendUndo(entry.id, 0, state);
   return entry;
 }
 
@@ -101,12 +122,18 @@ export function markSourceLoaded(source: SourceRef): IndexEntry {
   if (currentTententoon.id && knownSource === null) {
     knownSource = source;
     const state = snapshotState(source);
-    persistence.writeState(currentTententoon.id, state);
+    const id = currentTententoon.id;
+    persistence.writeState(id, state);
     // Filling an empty tententoon is the first "real" state — undo
-    // back to here, not to the source-less baseline.
+    // back to here, not to the source-less baseline. Drop the prior
+    // (source: null) IDB undo log and persist the new baseline.
     resetUndo(state);
+    void (async () => {
+      await persistence.dropUndo(id);
+      await persistence.appendUndo(id, 0, state);
+    })();
     return {
-      id: currentTententoon.id,
+      id,
       name: currentTententoon.name,
       createdAt: 0,
       updatedAt: Date.now()
@@ -128,6 +155,7 @@ export function createEmpty(): IndexEntry {
   currentTententoon.id = entry.id;
   currentTententoon.name = entry.name;
   resetUndo(state);
+  void persistence.appendUndo(entry.id, 0, state);
   return entry;
 }
 
@@ -160,6 +188,14 @@ export function renameTententoon(id: string, name: string): void {
 export function deleteTententoon(id: string): void {
   const wasCurrent = currentTententoon.id === id;
   persistence.remove(id);
+  // Fire-and-forget cleanup of the per-id IDB rows plus a sweep for
+  // orphaned blobs. Synchronous remove() already cleared the
+  // localStorage entries so gcOrphanBlobs sees the post-delete refs.
+  void (async () => {
+    await persistence.dropUndo(id);
+    await dropThumb(id);
+    await persistence.gcOrphanBlobs();
+  })();
   if (wasCurrent) {
     currentTententoon.hydrating = true;
     try {
@@ -183,14 +219,18 @@ export function deleteTententoon(id: string): void {
 export function performUndo(): void {
   if (!canUndo() || !currentTententoon.id) return;
   undoStep();
-  persistence.writeState(currentTententoon.id, snapshotState(knownSource));
+  const id = currentTententoon.id;
+  persistence.writeState(id, snapshotState(knownSource));
+  scheduleThumb(id);
 }
 
 /** Symmetric to performUndo. */
 export function performRedo(): void {
   if (!canRedo() || !currentTententoon.id) return;
   redoStep();
-  persistence.writeState(currentTententoon.id, snapshotState(knownSource));
+  const id = currentTententoon.id;
+  persistence.writeState(id, snapshotState(knownSource));
+  scheduleThumb(id);
 }
 
 export { canUndo, canRedo } from './undo.svelte';
@@ -241,7 +281,12 @@ export async function load(id: string): Promise<boolean> {
     currentTententoon.id = entry.id;
     currentTententoon.name = entry.name;
     persistence.setCurrentId(entry.id);
-    resetUndo(state);
+    // Hydrate the in-memory undo stack from IDB so ⌘Z survives reload.
+    // Pointer is positioned to match the on-disk state (the user may
+    // have undone before reloading); if no entry matches, hydrateUndo
+    // falls back to the head.
+    const rows = await persistence.readUndo(entry.id);
+    hydrateUndo(rows, state);
     return true;
   } finally {
     currentTententoon.hydrating = false;

@@ -10,6 +10,7 @@
    */
   import Icon from './Icon.svelte';
   import type { IndexEntry } from '../../lib/ui1/persistence';
+  import { thumbCache, loadThumbInto } from '../../lib/ui1/thumb.svelte';
 
   type Props = {
     entry: IndexEntry;
@@ -37,6 +38,13 @@
 
   const hue = $derived(seedHue(entry.id));
   const stamp = $derived(relTime(entry.updatedAt));
+  const thumbUrl = $derived(thumbCache[entry.id] ?? null);
+
+  // Pull the thumb out of IDB on first mount. Subsequent autosave
+  // captures publish straight to thumbCache.
+  $effect(() => {
+    void loadThumbInto(entry.id);
+  });
 </script>
 
 <!--
@@ -58,11 +66,15 @@
     }
   }}
 >
-  <div
-    class="thumb"
-    style:--h={hue}
-    aria-hidden="true"
-  ></div>
+  {#if thumbUrl}
+    <img class="thumb thumb-img" src={thumbUrl} alt="" />
+  {:else}
+    <div
+      class="thumb"
+      style:--h={hue}
+      aria-hidden="true"
+    ></div>
+  {/if}
   <div class="meta">
     <span class="name" title={entry.name}>{entry.name}</span>
     <span class="when mono">{stamp}</span>
@@ -120,6 +132,13 @@
         hsl(var(--h) 55% 70%) 0%,
         hsl(calc(var(--h) + 30) 60% 45%) 100%
       );
+  }
+  .thumb-img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    background: #000;
   }
 
   .meta {

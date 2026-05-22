@@ -12,3 +12,12 @@ export {
   generateName
 } from './tententoons';
 export { putBlob, getBlob, hashBlob } from './blobs';
+export {
+  appendUndo,
+  readUndo,
+  truncateRedoTail,
+  trimUndo,
+  dropUndo
+} from './undo-log';
+export { putThumb, getThumb, deleteThumb } from './thumbs';
+export { gcOrphanBlobs } from './gc';
