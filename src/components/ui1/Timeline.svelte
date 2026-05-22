@@ -113,8 +113,8 @@
       <input
         class="dslider"
         type="range"
-        min="2"
-        max="30"
+        min="1"
+        max="10"
         step="0.5"
         bind:value={playback.loopLength}
         disabled={!enabled}

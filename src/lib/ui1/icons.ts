@@ -16,6 +16,8 @@ export const ICON = {
     '<path d="M12 4v12"/><path d="M6 12l6 6 6-6"/><path d="M4 21h16"/>',
   upload: '<path d="M12 20V8"/><path d="M6 12l6-6 6 6"/><path d="M4 21h16"/>',
   reset: '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>',
+  history:
+    '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/>',
   caret: '<path d="M6 9l6 6 6-6"/>',
   swap:
     '<path d="M16 3l4 4-4 4"/><path d="M20 7H8"/><path d="M8 21l-4-4 4-4"/><path d="M4 17h12"/>',
@@ -31,7 +33,8 @@ export const ICON = {
     '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>',
   film:
     '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M3 15h18M9 4v16M15 4v16"/>',
-  gif: '<rect x="3" y="5" width="18" height="14" rx="2"/>',
+  gif:
+    '<rect x="3" y="5" width="18" height="14" rx="2"/><text x="12" y="15" text-anchor="middle" font-size="7" font-weight="700" font-family="ui-monospace, monospace" fill="currentColor" stroke="none">GIF</text>',
   uploadBig:
     '<path d="M12 16V4"/><path d="M6 10l6-6 6 6"/><path d="M4 20h16"/>',
   sun:

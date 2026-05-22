@@ -25,6 +25,7 @@
     ui, doc, playback, commitTranslate,
     applyTheme, readThemeOverride
   } from '../lib/ui1/state.svelte';
+  import { loadHistory } from '../lib/ui1/history.svelte';
   import { phase } from '../lib/ui1/render';
 
   // Plumbing the live canvas + a render-frame fn up to the export menu in
@@ -87,6 +88,10 @@
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
   });
+
+  // Hydrate the Recent-tententoons history from IndexedDB on mount so
+  // the menu in the TopBar can render its thumbnails right away.
+  $effect(() => { void loadHistory(); });
 </script>
 
 <div class="ui1-root theme-{ui.theme}">

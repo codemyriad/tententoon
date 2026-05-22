@@ -2,6 +2,7 @@
   import Icon from './Icon.svelte';
   import { ui, doc, setImage, commitNewRect } from '../../lib/ui1/state.svelte';
   import { loadFile, loadUrl } from '../../lib/ui1/file';
+  import { addToHistory } from '../../lib/ui1/history.svelte';
   import { publicAssetUrl } from '../../lib/asset-url';
 
   let dragOver = $state(false);
@@ -10,9 +11,11 @@
 
   async function handle(files: FileList | null) {
     if (!files || files.length === 0) return;
-    const r = await loadFile(files[0]);
+    const file = files[0];
+    const r = await loadFile(file);
     if (r.ok) {
       setImage(r.image, r.name);
+      void addToHistory(file, r.image, r.name);
       errorMsg = null;
     } else {
       errorMsg = r.reason;

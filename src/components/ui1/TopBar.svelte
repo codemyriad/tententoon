@@ -1,12 +1,14 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
   import ExportMenu from './ExportMenu.svelte';
+  import RecentMenu from './RecentMenu.svelte';
   import InfoModal from './InfoModal.svelte';
   import {
     ui, doc, setImage, commitNewRect,
     setThemeOverride, readThemeOverride, systemTheme
   } from '../../lib/ui1/state.svelte';
   import { loadFile } from '../../lib/ui1/file';
+  import { addToHistory } from '../../lib/ui1/history.svelte';
 
   type Props = {
     canvas: HTMLCanvasElement | null;
@@ -29,9 +31,14 @@
 
   async function onFile(files: FileList | null) {
     if (!files || files.length === 0) return;
-    const r = await loadFile(files[0]);
-    if (r.ok) setImage(r.image, r.name);
-    else ui.exportToast = r.reason;
+    const file = files[0];
+    const r = await loadFile(file);
+    if (r.ok) {
+      setImage(r.image, r.name);
+      void addToHistory(file, r.image, r.name);
+    } else {
+      ui.exportToast = r.reason;
+    }
   }
 
   // Theme toggle. Three-state cycle: system → light → dark → system.
@@ -101,6 +108,7 @@
   <button class="btn ghost compactable" onclick={reset} disabled={!doc.image} title="Reset rectangle" aria-label="Reset rectangle">
     <Icon name="reset" size={14} /><span class="lbl">Reset</span>
   </button>
+  <RecentMenu />
   <button class="btn compactable" onclick={replace} title="Replace image" aria-label="Replace image">
     <Icon name="upload" size={14} /><span class="lbl">Replace</span>
   </button>

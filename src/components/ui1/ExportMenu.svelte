@@ -3,6 +3,7 @@
   import { ui, doc, playback } from '../../lib/ui1/state.svelte';
   import { exportPng } from '../../lib/ui1/exports/png';
   import { exportVideo } from '../../lib/ui1/exports/mp4';
+  import { exportGif } from '../../lib/ui1/exports/gif';
 
   // Caller passes a per-frame render fn (which renders to ANY canvas at
   // a given progress t ∈ [0,1)). The MP4 export now drives a hidden
@@ -20,9 +21,9 @@
   let { renderFrame }: Props = $props();
 
   let busy = $state(false);
-  // One progress channel for both export kinds — same modal, different labels.
+  // One progress channel for all export kinds — same modal, different labels.
   // null = idle.
-  type ProgressKind = 'image' | 'video';
+  type ProgressKind = 'image' | 'video' | 'gif';
   let progress = $state<{ kind: ProgressKind; fraction: number } | null>(null);
   // Cancellation flag handed to whichever export is running.
   let cancelFlag: { cancelled: boolean } | null = null;
@@ -91,6 +92,36 @@
     }
   }
 
+  async function doGif() {
+    if (!doc.image || busy) return;
+    busy = true;
+    ui.exportMenuOpen = false;
+    progress = { kind: 'gif', fraction: 0 };
+    cancelFlag = { cancelled: false };
+    playback.exporting = true;
+    try {
+      await exportGif({
+        imageWidth: doc.image.width,
+        imageHeight: doc.image.height,
+        loopSeconds: playback.loopLength,
+        renderFrame,
+        filenameBase: basename(''),
+        signal: cancelFlag,
+        onProgress: (p) => { progress = { kind: 'gif', fraction: p.fraction }; }
+      });
+      ui.exportToast = 'GIF saved.';
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      ui.exportToast = msg === 'cancelled' ? 'Export cancelled.' : `GIF export failed: ${msg}`;
+    } finally {
+      progress = null;
+      cancelFlag = null;
+      busy = false;
+      playback.exporting = false;
+      hideToastAfter();
+    }
+  }
+
   function cancelExport() {
     if (cancelFlag) cancelFlag.cancelled = true;
   }
@@ -137,6 +168,14 @@
       <span class="text">
         <span class="t">Video</span>
         <span class="s">A looping zoom of a tententoon of your picture · {playback.loopLength.toFixed(0)}s</span>
+      </span>
+      <span class="dl"><Icon name="download" size={14} /></span>
+    </button>
+    <button class="item" disabled={busy || !doc.image} onclick={doGif}>
+      <span class="ic"><Icon name="gif" size={14} /></span>
+      <span class="text">
+        <span class="t">Looping GIF</span>
+        <span class="s">{playback.loopLength.toFixed(0)}s · 480px · 25fps</span>
       </span>
       <span class="dl"><Icon name="download" size={14} /></span>
     </button>

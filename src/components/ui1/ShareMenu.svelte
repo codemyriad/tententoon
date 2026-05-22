@@ -15,6 +15,7 @@
   import { ui, doc, playback } from '../../lib/ui1/state.svelte';
   import { exportPng } from '../../lib/ui1/exports/png';
   import { exportVideo } from '../../lib/ui1/exports/mp4';
+  import { exportGif } from '../../lib/ui1/exports/gif';
   import { shareBlob, shareCapability, WATERMARK_TEXT } from '../../lib/ui1/exports/share';
 
   type Props = {
@@ -25,15 +26,15 @@
   // Compute capability once on mount — navigator.canShare is sync so
   // a constant here is fine and avoids per-render probes.
   const cap = typeof window === 'undefined'
-    ? { image: false, video: { mp4: false, webm: false } }
+    ? { image: false, gif: false, video: { mp4: false, webm: false } }
     : shareCapability();
-  const available = cap.image || cap.video.mp4 || cap.video.webm;
+  const available = cap.image || cap.gif || cap.video.mp4 || cap.video.webm;
 
   let open = $state(false);
   let busy = $state(false);
   // Same progress shape as ExportMenu so the user gets a consistent
   // overlay regardless of which menu kicked off the render.
-  type ProgressKind = 'image' | 'video';
+  type ProgressKind = 'image' | 'video' | 'gif';
   let progress = $state<{ kind: ProgressKind; fraction: number } | null>(null);
   let cancelFlag: { cancelled: boolean } | null = null;
   // After a successful render, the blob waits here for the user to tap
@@ -136,6 +137,41 @@
     }
   }
 
+  async function doShareGif() {
+    if (!doc.image || busy) return;
+    busy = true;
+    open = false;
+    progress = { kind: 'gif', fraction: 0 };
+    cancelFlag = { cancelled: false };
+    playback.exporting = true;
+    try {
+      const { blob } = await exportGif({
+        imageWidth: doc.image.width,
+        imageHeight: doc.image.height,
+        loopSeconds: playback.loopLength,
+        renderFrame,
+        filenameBase: basename(''),
+        signal: cancelFlag,
+        onProgress: (p) => { progress = { kind: 'gif', fraction: p.fraction }; },
+        watermark: WATERMARK_TEXT,
+        output: 'blob'
+      });
+      if (!blob) throw new Error('No blob produced');
+      pendingShare = { kind: 'gif', blob, filename: `${basename('')}.gif`, mime: 'image/gif' };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      ui.exportToast = msg === 'cancelled'
+        ? 'Share cancelled.'
+        : `Share failed: ${msg}`;
+      hideToastAfter();
+    } finally {
+      progress = null;
+      cancelFlag = null;
+      busy = false;
+      playback.exporting = false;
+    }
+  }
+
   async function commitShare() {
     if (!pendingShare) return;
     const { blob, filename, mime } = pendingShare;
@@ -207,6 +243,15 @@
             <span class="text">
               <span class="t">Video</span>
               <span class="s">A {playback.loopLength.toFixed(0)}s looping zoom</span>
+            </span>
+          </button>
+        {/if}
+        {#if cap.gif}
+          <button class="item" disabled={busy} onclick={doShareGif}>
+            <span class="ic"><Icon name="gif" size={14} /></span>
+            <span class="text">
+              <span class="t">Looping GIF</span>
+              <span class="s">{playback.loopLength.toFixed(0)}s · 480px · 25fps</span>
             </span>
           </button>
         {/if}

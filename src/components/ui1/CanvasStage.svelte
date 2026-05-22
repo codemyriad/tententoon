@@ -234,6 +234,10 @@
     if (h) { cursor = handleCursor(h); return; }
     const img = eventToImage(e);
     if (img && hasRect && inRect(img)) { cursor = 'move'; return; }
+    // When zoomed in with a rect committed, dragging anywhere outside
+    // the nest pans the view — show the same grab cursor everywhere so
+    // the affordance reads as "this is now the pan zone".
+    if (hasRect && zoom > 1) { cursor = 'grab'; return; }
     // In the crop margin (inside the working frame, outside the nest):
     // signal "grab" so the user knows they can drag the crop. Skip the
     // hint when the crop already fills the image on both axes — there's
@@ -399,6 +403,18 @@
     }
     if (hasRect && inRect(img)) {
       drag = { kind: 'body', startRect: { ...doc.rect }, startImg: img };
+      return;
+    }
+    // Zoomed-in nav: when the view is zoomed in, single-pointer drag
+    // anywhere outside the nest (crop margin OR empty area) pans the
+    // view. Crop translate isn't useful when zoomed (the user is
+    // navigating the picture, not reframing it), and a new marquee
+    // would obliterate the current selection. At fit-zoom this branch
+    // is skipped so the desktop "draw to crop" / "drag crop margin"
+    // affordances are preserved. Two-finger pinch is unchanged — its
+    // branch above wins before we get here.
+    if (hasRect && zoom > 1) {
+      drag = { kind: 'pan', startCss: cp, startPan: { ...pan } };
       return;
     }
     // Crop margin (between the nest and the working-frame outline):

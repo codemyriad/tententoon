@@ -56,9 +56,14 @@ export function canShareFiles(mimeType: string, suggestedExt: string): boolean {
 }
 
 /** Quick combined check used by the share UI to decide whether to render at all. */
-export function shareCapability(): { image: boolean; video: { mp4: boolean; webm: boolean } } {
+export function shareCapability(): {
+  image: boolean;
+  gif: boolean;
+  video: { mp4: boolean; webm: boolean };
+} {
   return {
     image: canShareFiles('image/png', 'png'),
+    gif: canShareFiles('image/gif', 'gif'),
     video: {
       mp4: canShareFiles('video/mp4', 'mp4'),
       webm: canShareFiles('video/webm', 'webm')
