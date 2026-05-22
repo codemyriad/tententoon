@@ -112,6 +112,8 @@
   h2 { margin: 0; flex: 1; font-size: 15px; font-weight: 600; }
   .x {
     width: 26px; height: 26px;
+    padding: 0;
+    box-sizing: border-box;
     border-radius: 6px;
     border: 1px solid transparent;
     background: transparent;
@@ -119,7 +121,7 @@
     cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center;
   }
-  .x:hover { background: var(--panel-2); color: var(--ink); }
+  .x:hover { background: var(--panel-2); color: var(--ink); border-color: transparent; }
   .body { padding: 14px 16px 16px; }
   .field {
     display: block;

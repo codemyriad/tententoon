@@ -168,8 +168,10 @@
   .tile:focus-within .actions { opacity: 1; }
 
   .action {
-    width: 24px;
-    height: 24px;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    box-sizing: border-box;
     border-radius: 6px;
     border: none;
     background: rgba(255, 255, 255, 0.92);
@@ -180,7 +182,8 @@
     justify-content: center;
     backdrop-filter: blur(2px);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    transition: background-color 120ms, color 120ms;
   }
-  .action:hover { background: #fff; }
+  .action:hover { background: #fff; color: #000; border-color: transparent; }
   .action.danger:hover { background: #c84a4a; color: #fff; }
 </style>

@@ -194,6 +194,7 @@
     align-items: center;
     gap: 6px;
     padding: 6px 10px;
+    box-sizing: border-box;
     border-radius: 7px;
     border: 1px solid var(--accent);
     background: var(--accent);
@@ -203,12 +204,14 @@
     cursor: pointer;
     flex-shrink: 0;
   }
-  .new:hover { filter: brightness(1.05); }
+  .new:hover { filter: brightness(1.05); border-color: var(--accent); color: #fff; }
   .new span { font-weight: 500; }
 
   .x {
     width: 28px;
     height: 28px;
+    padding: 0;
+    box-sizing: border-box;
     border-radius: 7px;
     border: 1px solid transparent;
     background: transparent;
@@ -219,7 +222,7 @@
     justify-content: center;
     flex-shrink: 0;
   }
-  .x:hover { background: var(--panel-2); color: var(--ink); }
+  .x:hover { background: var(--panel-2); color: var(--ink); border-color: transparent; }
 
   .body {
     padding: 14px 18px 18px;
