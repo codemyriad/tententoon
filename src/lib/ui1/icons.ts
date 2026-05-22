@@ -53,6 +53,14 @@ export const ICON = {
     '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="8" r="0.6" fill="currentColor"/>',
   close:
     '<path d="M6 6l12 12"/><path d="M18 6L6 18"/>',
+  gallery:
+    '<rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/>',
+  trash:
+    '<path d="M3 6h18"/><path d="M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2"/><path d="M19 6l-1.5 13a2 2 0 01-2 1.8h-7a2 2 0 01-2-1.8L5 6"/>',
+  pencil:
+    '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/>',
+  plus:
+    '<path d="M12 5v14"/><path d="M5 12h14"/>',
   external:
     '<path d="M14 4h6v6"/><path d="M20 4L10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>'
 } as const;

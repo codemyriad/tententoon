@@ -3,6 +3,7 @@
   import ExportMenu from './ExportMenu.svelte';
   import RecentMenu from './RecentMenu.svelte';
   import InfoModal from './InfoModal.svelte';
+  import Gallery from './Gallery.svelte';
   import {
     ui, doc, setImage, commitNewRect,
     setThemeOverride, readThemeOverride, systemTheme
@@ -20,6 +21,7 @@
 
   let input: HTMLInputElement;
   let infoOpen = $state(false);
+  let galleryOpen = $state(false);
 
   function reset() {
     // Zero rect → commitNewRect also nulls doc.crop so the working
@@ -109,6 +111,14 @@
   >
     <Icon name={isDark ? 'moon' : 'sun'} size={14} />
   </button>
+  <button
+    class="btn ghost compactable"
+    onclick={() => (galleryOpen = true)}
+    title="Gallery"
+    aria-label="Gallery"
+  >
+    <Icon name="gallery" size={14} /><span class="lbl">Gallery</span>
+  </button>
   <button class="btn ghost compactable" onclick={reset} disabled={!doc.image} title="Reset rectangle" aria-label="Reset rectangle">
     <Icon name="reset" size={14} /><span class="lbl">Reset</span>
   </button>
@@ -139,6 +149,7 @@
 </header>
 
 <InfoModal open={infoOpen} onClose={() => (infoOpen = false)} />
+<Gallery open={galleryOpen} onClose={() => (galleryOpen = false)} />
 
 <style>
   .top {
