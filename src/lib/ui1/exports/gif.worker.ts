@@ -1,15 +1,14 @@
 /**
- * GIF encoding worker. The main thread renders each frame to RGBA pixels
- * (using the same renderFrame fn the video export uses) and posts them
- * here; we quantize a 256-colour palette per frame, apply it, and feed
- * the LZW-indexed bytes to gifenc's GIFEncoder. The result loops forever
- * (gifenc defaults to repeat=0 on the first writeFrame).
- *
- * Per-frame quantize + LZW is the expensive part — running it here keeps
- * the main thread free for rendering the next frame in parallel.
+ * GIF encoding worker.
+ * 
+ * Instead of quantizing and encoding each frame independently (which causes color flickering
+ * and wastes the color budget), this worker accumulates all frames in memory, constructs
+ * a single unified global palette from across the animation timeline, and then applies
+ * Floyd-Steinberg error-diffusion dithering to each frame.
  */
 
-import { GIFEncoder, quantize, applyPalette } from 'gifenc';
+import { GIFEncoder, quantize } from 'gifenc';
+import { applyPaletteWithDither } from './dither';
 
 type Inbound =
   | { type: 'start'; delayMs: number }
@@ -27,8 +26,16 @@ type Outbound =
   | { type: 'done'; bytes: ArrayBuffer }
   | { type: 'error'; error: string };
 
+type FrameData = {
+  rgba: Uint8ClampedArray;
+  width: number;
+  height: number;
+  index: number;
+};
+
 let enc: ReturnType<typeof GIFEncoder> | null = null;
 let delayMs = 80;
+let frames: FrameData[] = [];
 
 function post(msg: Outbound, transfer: Transferable[] = []): void {
   (self as unknown as Worker).postMessage(msg, transfer);
@@ -40,25 +47,75 @@ self.onmessage = (e: MessageEvent<Inbound>) => {
     if (msg.type === 'start') {
       enc = GIFEncoder();
       delayMs = msg.delayMs;
+      frames = [];
     } else if (msg.type === 'frame') {
       if (!enc) throw new Error('encoder not started');
-      const rgba = new Uint8ClampedArray(msg.rgba);
-      // rgb444 keeps the per-frame palette computation cheap; the spiral
-      // has smoothly-shaded regions and the visible banding is mild.
-      const palette = quantize(rgba, 256, { format: 'rgb444' });
-      const indexed = applyPalette(rgba, palette, 'rgb444');
-      enc.writeFrame(indexed, msg.width, msg.height, { palette, delay: delayMs });
-      post({ type: 'frame-encoded', index: msg.index });
+      
+      // Store the frame data in memory for unified batch processing
+      frames.push({
+        rgba: new Uint8ClampedArray(msg.rgba),
+        width: msg.width,
+        height: msg.height,
+        index: msg.index
+      });
     } else if (msg.type === 'finish') {
       if (!enc) throw new Error('encoder not started');
+      if (frames.length === 0) throw new Error('no frames to encode');
+      
+      // Sort frames by index to ensure correct chronological ordering
+      frames.sort((a, b) => a.index - b.index);
+      
+      // 1. Construct a unified global palette
+      // Sample pixels across a maximum of 10 evenly spaced frames to build a representative color table
+      const sampleStep = Math.max(1, Math.floor(frames.length / 10));
+      const samplePixels: number[] = [];
+      
+      for (let f = 0; f < frames.length; f += sampleStep) {
+        const frame = frames[f];
+        const rgba = frame.rgba;
+        // Sample every 4th pixel (16 bytes stride: 4 channels * 4) to keep quantization fast but accurate
+        for (let i = 0; i < rgba.length; i += 16) {
+          samplePixels.push(rgba[i], rgba[i + 1], rgba[i + 2], rgba[i + 3]);
+        }
+      }
+      
+      const sampleBuf = new Uint8Array(samplePixels);
+      // 'rgb565' is the high-quality format with 65,536 color bins
+      const globalPalette = quantize(sampleBuf, 256, { format: 'rgb565' });
+      
+      // 2. Dither and encode each frame sequentially
+      for (let i = 0; i < frames.length; i++) {
+        const frame = frames[i];
+        
+        // Apply Floyd-Steinberg dithering with the global palette in rgb565 format
+        const indexed = applyPaletteWithDither(
+          frame.rgba,
+          globalPalette,
+          frame.width,
+          frame.height,
+          { strength: 0.8 }
+        );
+        
+        // The first frame establishes the Global Color Table (global palette) in the GIF.
+        // Subsequent frames pass `palette: null` so they reuse the global palette, saving space.
+        enc.writeFrame(indexed, frame.width, frame.height, {
+          palette: i === 0 ? globalPalette : null,
+          delay: delayMs
+        });
+        
+        // Notify the main thread of progress so the progress bar updates smoothly
+        post({ type: 'frame-encoded', index: frame.index });
+      }
+      
+      // 3. Finalize encoding and send back the results
       enc.finish();
       const bytes = enc.bytes();
-      // Transfer the underlying buffer so the main thread can wrap it
-      // in a Blob without copying. bytes.buffer can be a SharedArrayBuffer
-      // in some envs — slice() always returns a plain ArrayBuffer.
       const buf = bytes.slice().buffer as ArrayBuffer;
       post({ type: 'done', bytes: buf }, [buf]);
+      
+      // Clean up references to free memory
       enc = null;
+      frames = [];
     }
   } catch (err) {
     post({ type: 'error', error: err instanceof Error ? err.message : String(err) });

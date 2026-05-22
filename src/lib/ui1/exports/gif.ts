@@ -88,6 +88,7 @@ export async function exportGif({
       | { type: 'error'; error: string };
     if (msg.type === 'frame-encoded') {
       encodedFrames++;
+      onProgress?.({ fraction: 0.5 + (encodedFrames / totalFrames) * 0.5, phase: 'encode' });
     } else if (msg.type === 'done') {
       finishResolve?.(msg.bytes);
     } else if (msg.type === 'error') {
@@ -120,12 +121,8 @@ export async function exportGif({
         { type: 'frame', index: i, width, height, rgba: buf },
         [buf]
       );
-      const renderFrac = (i + 1) / totalFrames;
-      const encodeFrac = encodedFrames / totalFrames;
-      // Surface the lagging side so the progress bar reflects real work
-      // remaining rather than overstating completion.
-      const lagging = Math.min(renderFrac, encodeFrac);
-      onProgress?.({ fraction: lagging, phase: encodeFrac < renderFrac ? 'encode' : 'render' });
+      // Render phase represents the first 50% of progress
+      onProgress?.({ fraction: ((i + 1) / totalFrames) * 0.5, phase: 'render' });
     }
 
     if (signal?.cancelled) throw new Error('cancelled');
