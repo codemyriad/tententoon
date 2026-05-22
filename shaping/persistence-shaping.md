@@ -428,6 +428,18 @@ A one-time migration on boot can read the old keys and create a single tententoo
 
 ---
 
+## Status
+
+Shipped on `main` and deployed to https://tententoon.pages.dev.
+
+| Slice | Commit | Closes |
+|-------|--------|--------|
+| V1 | f78137e | R0, R3 mech, R8, R10, R15 |
+| V2 | ec074d9 | R1, R3 UI |
+| V3 | dfcc2e6 | R2, R12 |
+| V4 | 65e3ae8 + 54c2d99 | R4, R5, R7, R9, R13 |
+| V5 | 5addd55 | R6, R11, R14 |
+
 ## Slicing
 
 5 slices, each demo-able end-to-end:
