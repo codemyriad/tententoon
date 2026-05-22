@@ -14,7 +14,7 @@
  * a fresh history step.
  */
 
-import { doc, playback, ui } from './state.svelte';
+import { doc } from './state.svelte';
 import type { TtState } from './persistence';
 
 export const undoState = $state<{
@@ -52,23 +52,23 @@ export function clearUndo(): void {
 }
 
 /**
- * Append a new state to the stack. If the pointer was anywhere but
- * the head (= user had undone some steps), the redo tail is dropped
- * before the append — once a new edit lands, the alternate future is
- * gone.
+ * Append a new state to the stack — but only if its rect/crop differ
+ * from the current head. Undo is scoped to rectangle edits: changing
+ * view, play state, direction, or loop length still autosaves to
+ * disk via the caller's writeState but does not create an undo step.
  *
- * Skips no-op pushes where the new state equals the current head;
- * gestures that don't actually change anything (e.g. pointerup after
- * a click without drag) shouldn't pollute the stack.
+ * If the pointer was anywhere but the head (user had undone some
+ * steps), the redo tail is dropped before the append — once a new
+ * edit lands, the alternate future is gone (R13).
  */
 export function pushUndo(next: TtState): void {
   if (isApplying.value) return;
+  const head = undoState.stack[undoState.stack.length - 1];
+  if (head && rectsEqual(head, next)) return;
   // Drop the redo tail if we're not at the head.
   if (undoState.pointer < undoState.stack.length - 1) {
     undoState.stack = undoState.stack.slice(0, undoState.pointer + 1);
   }
-  const head = undoState.stack[undoState.stack.length - 1];
-  if (head && statesEqual(head, next)) return;
   undoState.stack = [...undoState.stack, cloneState(next)];
   undoState.pointer = undoState.stack.length - 1;
 }
@@ -88,26 +88,23 @@ export function redo(): void {
 }
 
 /**
- * Write a snapshot back into the live editor stores. Wraps the writes
- * in `isApplying = true` so the autosave engine skips its pushUndo()
- * for the resulting state changes. The flag is cleared in a microtask
- * so any synchronous reactive effects triggered by these writes still
- * see it as true.
+ * Write a snapshot back into the live editor stores. Restores only
+ * the *document* fields (rect, crop) — view mode, play state,
+ * direction, and loopLength are session/UI concerns, not part of
+ * the rectangle-edit history the user expects ⌘Z to walk. They
+ * still autosave to disk, just outside the undo timeline.
+ *
+ * Wraps the writes in `isApplying = true` so the autosave engine
+ * skips its pushUndo() for the resulting state changes. The flag is
+ * cleared in a microtask so any synchronous reactive effects fired
+ * by the writes still see it as true.
  */
 export function applySnapshot(snap: TtState): void {
   isApplying.value = true;
   try {
     doc.rect = { ...snap.rect };
     doc.crop = snap.crop ? { ...snap.crop } : null;
-    playback.speed = snap.playback.speed;
-    playback.direction = snap.playback.direction;
-    playback.loopLength = snap.playback.loopLength;
-    playback.playing = snap.playback.playing;
-    ui.view = snap.view;
   } finally {
-    // Defer the reset so any reactive effects fired by the writes above
-    // observe `isApplying = true`. A microtask is enough — by the time
-    // the user could trigger another gesture, the flag is back to false.
     queueMicrotask(() => {
       isApplying.value = false;
     });
@@ -125,20 +122,14 @@ function cloneState(s: TtState): TtState {
   } as TtState;
 }
 
-function statesEqual(a: TtState, b: TtState): boolean {
+/** Rect + crop equality — the only fields the undo timeline tracks. */
+function rectsEqual(a: TtState, b: TtState): boolean {
   return (
-    a.view === b.view &&
-    a.imageName === b.imageName &&
     a.rect.x === b.rect.x &&
     a.rect.y === b.rect.y &&
     a.rect.w === b.rect.w &&
     a.rect.h === b.rect.h &&
-    cropEq(a.crop, b.crop) &&
-    a.playback.speed === b.playback.speed &&
-    a.playback.direction === b.playback.direction &&
-    a.playback.loopLength === b.playback.loopLength &&
-    a.playback.playing === b.playback.playing &&
-    sourceEq(a.source, b.source)
+    cropEq(a.crop, b.crop)
   );
 }
 
@@ -146,13 +137,4 @@ function cropEq(a: TtState['crop'], b: TtState['crop']): boolean {
   if (!a && !b) return true;
   if (!a || !b) return false;
   return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
-}
-
-function sourceEq(a: TtState['source'], b: TtState['source']): boolean {
-  if (!a && !b) return true;
-  if (!a || !b) return false;
-  if (a.kind !== b.kind) return false;
-  if (a.kind === 'url' && b.kind === 'url') return a.url === b.url;
-  if (a.kind === 'blob' && b.kind === 'blob') return a.hash === b.hash;
-  return false;
 }
