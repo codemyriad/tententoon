@@ -80,6 +80,84 @@ export function markCreate(source: SourceRef): IndexEntry {
 }
 
 /**
+ * "Fill" the current tententoon's source if it's a fresh `null`-source
+ * entry; otherwise create a new tententoon. Used by DropZone after a
+ * user clicked "New" in the gallery — the empty entry exists, the next
+ * upload should land in it, not stack a second one.
+ */
+export function markSourceLoaded(source: SourceRef): IndexEntry {
+  if (currentTententoon.id && knownSource === null) {
+    knownSource = source;
+    const state = snapshotState(source);
+    persistence.writeState(currentTententoon.id, state);
+    return {
+      id: currentTententoon.id,
+      name: currentTententoon.name,
+      createdAt: 0,
+      updatedAt: Date.now()
+    };
+  }
+  return markCreate(source);
+}
+
+/**
+ * Create an empty tententoon (no source). Used by the gallery's "New"
+ * button. Sets it as current so the editor renders the empty state and
+ * the next upload fills the entry in place.
+ */
+export function createEmpty(): IndexEntry {
+  knownSource = null;
+  setImage(null, '');
+  const state = snapshotState(null);
+  const entry = persistence.create(state, 'Untitled · ' + nowStamp());
+  currentTententoon.id = entry.id;
+  currentTententoon.name = entry.name;
+  return entry;
+}
+
+function nowStamp(): string {
+  const d = new Date();
+  return (
+    d.getFullYear() +
+    '-' +
+    String(d.getMonth() + 1).padStart(2, '0') +
+    '-' +
+    String(d.getDate()).padStart(2, '0') +
+    ' ' +
+    String(d.getHours()).padStart(2, '0') +
+    ':' +
+    String(d.getMinutes()).padStart(2, '0')
+  );
+}
+
+/** Rename the current or any tententoon. Updates the live store if it's current. */
+export function renameTententoon(id: string, name: string): void {
+  persistence.rename(id, name);
+  if (currentTententoon.id === id) currentTententoon.name = name;
+}
+
+/**
+ * Delete a tententoon. If it was the current one, the editor returns
+ * to its empty state — image cleared, currentTententoon zeroed,
+ * `tt:current` cleared by persistence.remove().
+ */
+export function deleteTententoon(id: string): void {
+  const wasCurrent = currentTententoon.id === id;
+  persistence.remove(id);
+  if (wasCurrent) {
+    currentTententoon.hydrating = true;
+    try {
+      setImage(null, '');
+      knownSource = null;
+      currentTententoon.id = null;
+      currentTententoon.name = '';
+    } finally {
+      currentTententoon.hydrating = false;
+    }
+  }
+}
+
+/**
  * Load a tententoon by id. Resolves the source (URL or IDB blob), calls
  * setImage to update the editor, then writes rect/crop/playback from the
  * snapshot. The hydrating flag suppresses autosave writes during this.

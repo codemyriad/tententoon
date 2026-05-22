@@ -7,8 +7,16 @@
    */
   import Icon from './Icon.svelte';
   import GalleryTile from './GalleryTile.svelte';
+  import RenameModal from './RenameModal.svelte';
+  import DeleteConfirm from './DeleteConfirm.svelte';
   import { list, type IndexEntry } from '../../lib/ui1/persistence';
-  import { currentTententoon, load } from '../../lib/ui1/tententoon.svelte';
+  import {
+    currentTententoon,
+    load,
+    createEmpty,
+    renameTententoon,
+    deleteTententoon
+  } from '../../lib/ui1/tententoon.svelte';
 
   type Props = { open: boolean; onClose: () => void };
   let { open, onClose }: Props = $props();
@@ -16,12 +24,19 @@
   let entries = $state<IndexEntry[]>([]);
   let pendingId = $state<string | null>(null);
 
-  // Re-read the index every time the modal opens so freshly-named or
-  // bumped entries surface without app reload. Reading localStorage is
-  // sync + cheap, so no loading state needed.
+  let renameTarget = $state<IndexEntry | null>(null);
+  let deleteTarget = $state<IndexEntry | null>(null);
+
+  // Re-read the index every time the modal opens — and whenever we
+  // mutate (rename/delete/new) — so the grid reflects the latest state
+  // without a page reload. Reading localStorage is sync + cheap.
   $effect(() => {
-    if (open) entries = list();
+    if (open) refresh();
   });
+
+  function refresh() {
+    entries = list();
+  }
 
   async function onPick(id: string) {
     if (pendingId) return;
@@ -32,6 +47,33 @@
     } finally {
       pendingId = null;
     }
+  }
+
+  function onNew() {
+    createEmpty();
+    onClose();
+  }
+
+  function onRename(entry: IndexEntry) {
+    renameTarget = entry;
+  }
+
+  function onDelete(entry: IndexEntry) {
+    deleteTarget = entry;
+  }
+
+  function saveRename(name: string) {
+    if (!renameTarget) return;
+    renameTententoon(renameTarget.id, name);
+    renameTarget = null;
+    refresh();
+  }
+
+  function confirmDelete() {
+    if (!deleteTarget) return;
+    deleteTententoon(deleteTarget.id);
+    deleteTarget = null;
+    refresh();
   }
 
   function onKey(e: KeyboardEvent) {
@@ -60,6 +102,9 @@
             : `${entries.length} on this device`}
         </p>
       </div>
+      <button class="new" onclick={onNew} title="New tententoon">
+        <Icon name="plus" size={14} /><span>New</span>
+      </button>
       <button class="x" onclick={onClose} aria-label="Close">
         <Icon name="close" size={16} />
       </button>
@@ -78,12 +123,27 @@
               {entry}
               isCurrent={entry.id === currentTententoon.id}
               onPick={onPick}
+              onRename={onRename}
+              onDelete={onDelete}
             />
           {/each}
         </div>
       {/if}
     </div>
   </div>
+
+  <RenameModal
+    open={renameTarget !== null}
+    initial={renameTarget?.name ?? ''}
+    onClose={() => (renameTarget = null)}
+    onSave={saveRename}
+  />
+  <DeleteConfirm
+    open={deleteTarget !== null}
+    name={deleteTarget?.name ?? ''}
+    onClose={() => (deleteTarget = null)}
+    onConfirm={confirmDelete}
+  />
 {/if}
 
 <style>
@@ -129,6 +189,23 @@
   .title-wrap { flex: 1; min-width: 0; }
   h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
   .sub { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+  .new {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: #fff;
+    font: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .new:hover { filter: brightness(1.05); }
+  .new span { font-weight: 500; }
+
   .x {
     width: 28px;
     height: 28px;

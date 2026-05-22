@@ -4,13 +4,18 @@
   import RecentMenu from './RecentMenu.svelte';
   import InfoModal from './InfoModal.svelte';
   import Gallery from './Gallery.svelte';
+  import RenameModal from './RenameModal.svelte';
   import {
     ui, doc, setImage, commitNewRect,
     setThemeOverride, readThemeOverride, systemTheme
   } from '../../lib/ui1/state.svelte';
   import { loadFile } from '../../lib/ui1/file';
   import { addToHistory } from '../../lib/ui1/history.svelte';
-  import { markCreate, currentTententoon } from '../../lib/ui1/tententoon.svelte';
+  import {
+    markCreate,
+    currentTententoon,
+    renameTententoon
+  } from '../../lib/ui1/tententoon.svelte';
   import { putBlob } from '../../lib/ui1/persistence';
 
   type Props = {
@@ -22,6 +27,12 @@
   let input: HTMLInputElement;
   let infoOpen = $state(false);
   let galleryOpen = $state(false);
+  let renameOpen = $state(false);
+
+  function saveCurrentName(name: string) {
+    if (currentTententoon.id) renameTententoon(currentTententoon.id, name);
+    renameOpen = false;
+  }
 
   function reset() {
     // Zero rect → commitNewRect also nulls doc.crop so the working
@@ -85,13 +96,19 @@
   </button>
   <span class="div"></span>
   {#if doc.image}
-    <span class="file">
+    <button
+      class="file rename-btn"
+      onclick={() => (renameOpen = true)}
+      disabled={!currentTententoon.id}
+      title={currentTententoon.id ? 'Rename' : ''}
+      aria-label="Rename tententoon"
+    >
       <Icon name="image" size={14} />
       <span class="fname">{currentTententoon.name || doc.imageName || 'image'}</span>
       <span class="dim mono">· {doc.image.width}×{doc.image.height}</span>
-    </span>
+    </button>
   {:else}
-    <span class="file empty">Untitled · no image</span>
+    <span class="file empty">{currentTententoon.name || 'Untitled · no image'}</span>
   {/if}
   <span class="grow"></span>
   <button
@@ -150,6 +167,12 @@
 
 <InfoModal open={infoOpen} onClose={() => (infoOpen = false)} />
 <Gallery open={galleryOpen} onClose={() => (galleryOpen = false)} />
+<RenameModal
+  open={renameOpen}
+  initial={currentTententoon.name}
+  onClose={() => (renameOpen = false)}
+  onSave={saveCurrentName}
+/>
 
 <style>
   .top {
@@ -202,6 +225,24 @@
     color: var(--ink-2);
   }
   .file.empty { color: var(--muted); }
+  .rename-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    padding: 4px 8px;
+    margin: 0;
+    border-radius: 7px;
+    color: inherit;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    text-align: left;
+    min-width: 0;
+  }
+  .rename-btn:hover:not(:disabled) {
+    background: var(--panel-2);
+    border-color: var(--border);
+  }
+  .rename-btn:disabled { cursor: default; }
   .fname { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dim { color: var(--muted); font-size: 11px; }
   .mono { font-family: var(--font-mono); }

@@ -3,15 +3,22 @@
    * One tile in the Gallery grid. Placeholder thumbnail until V5 lands
    * real ones — a 2-stop gradient seeded by the tententoon id so the
    * placeholders are at least distinguishable from each other.
+   *
+   * Hovering the tile reveals two action buttons (rename, delete) in
+   * the top-right corner. Clicking them stops propagation so the tile's
+   * own click handler (= open this tententoon) doesn't also fire.
    */
+  import Icon from './Icon.svelte';
   import type { IndexEntry } from '../../lib/ui1/persistence';
 
   type Props = {
     entry: IndexEntry;
     isCurrent: boolean;
     onPick: (id: string) => void;
+    onRename: (entry: IndexEntry) => void;
+    onDelete: (entry: IndexEntry) => void;
   };
-  let { entry, isCurrent, onPick }: Props = $props();
+  let { entry, isCurrent, onPick, onRename, onDelete }: Props = $props();
 
   function seedHue(id: string): number {
     let h = 0;
@@ -32,7 +39,25 @@
   const stamp = $derived(relTime(entry.updatedAt));
 </script>
 
-<button class="tile" class:current={isCurrent} onclick={() => onPick(entry.id)}>
+<!--
+  Tile is a div+role=button rather than a real <button> because the
+  rename/delete affordances inside it are themselves buttons, and a
+  button-in-button is invalid HTML. We keep keyboard activation
+  (Enter / Space) so the tile stays accessible.
+-->
+<div
+  class="tile"
+  class:current={isCurrent}
+  role="button"
+  tabindex="0"
+  onclick={() => onPick(entry.id)}
+  onkeydown={(e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onPick(entry.id);
+    }
+  }}
+>
   <div
     class="thumb"
     style:--h={hue}
@@ -45,7 +70,25 @@
   {#if isCurrent}
     <span class="badge">Current</span>
   {/if}
-</button>
+  <div class="actions">
+    <button
+      class="action"
+      title="Rename"
+      aria-label="Rename"
+      onclick={(e) => { e.stopPropagation(); onRename(entry); }}
+    >
+      <Icon name="pencil" size={13} />
+    </button>
+    <button
+      class="action danger"
+      title="Delete"
+      aria-label="Delete"
+      onclick={(e) => { e.stopPropagation(); onDelete(entry); }}
+    >
+      <Icon name="trash" size={13} />
+    </button>
+  </div>
+</div>
 
 <style>
   .tile {
@@ -102,7 +145,7 @@
   .badge {
     position: absolute;
     top: 6px;
-    right: 6px;
+    left: 6px;
     background: var(--accent);
     color: #fff;
     font-size: 10px;
@@ -111,4 +154,33 @@
     border-radius: 999px;
     letter-spacing: 0.04em;
   }
+
+  .actions {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 120ms;
+  }
+  .tile:hover .actions,
+  .tile:focus-within .actions { opacity: 1; }
+
+  .action {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    border: none;
+    background: rgba(255, 255, 255, 0.92);
+    color: #2a241c;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(2px);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  }
+  .action:hover { background: #fff; }
+  .action.danger:hover { background: #c84a4a; color: #fff; }
 </style>

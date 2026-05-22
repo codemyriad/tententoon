@@ -3,7 +3,7 @@
   import { ui, doc, setImage, commitNewRect } from '../../lib/ui1/state.svelte';
   import { loadFile, loadUrl } from '../../lib/ui1/file';
   import { addToHistory } from '../../lib/ui1/history.svelte';
-  import { markCreate } from '../../lib/ui1/tententoon.svelte';
+  import { markSourceLoaded } from '../../lib/ui1/tententoon.svelte';
   import { putBlob } from '../../lib/ui1/persistence';
   import { publicAssetUrl } from '../../lib/asset-url';
 
@@ -19,7 +19,10 @@
       setImage(r.image, r.name);
       void addToHistory(file, r.image, r.name);
       const hash = await putBlob(file);
-      markCreate({ kind: 'blob', hash });
+      // DropZone shows when there's no source. If the user arrived here
+      // via gallery "New", markSourceLoaded fills the empty tententoon
+      // instead of creating a parallel one.
+      markSourceLoaded({ kind: 'blob', hash });
       errorMsg = null;
     } else {
       errorMsg = r.reason;
@@ -41,7 +44,7 @@
       // photograph's natural focal point so the spiral preview has a
       // sensible starting frame instead of a 0×0 rect.
       commitNewRect({ x: 340, y: 327, w: 595, h: 478 });
-      markCreate({ kind: 'url', url });
+      markSourceLoaded({ kind: 'url', url });
     } else {
       errorMsg = r.reason;
     }

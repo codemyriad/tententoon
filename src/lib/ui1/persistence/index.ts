@@ -5,6 +5,8 @@ export {
   list,
   readState,
   writeState,
+  rename,
+  remove,
   getCurrentId,
   setCurrentId,
   generateName

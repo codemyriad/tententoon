@@ -155,4 +155,30 @@ export function load(id: string): { entry: IndexEntry; state: TtState } | null {
   return { entry, state };
 }
 
+/** Update the display name of a tententoon. Does not touch updatedAt. */
+export function rename(id: string, name: string): void {
+  const all = readIndex();
+  const entry = all.find((e) => e.id === id);
+  if (!entry) return;
+  entry.name = name;
+  writeIndex(all);
+}
+
+/**
+ * Remove a tententoon. Drops the per-id state and the index entry.
+ * V3 stub for undo/thumb cleanup — both stores stay empty until V5
+ * populates them, so nothing to remove here. Orphan blob GC also
+ * lands in V5; uploads referenced only by this entry stay in the
+ * `blobs` IDB store until then.
+ */
+export function remove(id: string): void {
+  try {
+    localStorage.removeItem(stateKey(id));
+  } catch {}
+  const all = readIndex();
+  const next = all.filter((e) => e.id !== id);
+  writeIndex(next);
+  if (getCurrentId() === id) setCurrentId(null);
+}
+
 export type { IndexEntry, TtState, SourceRef };
