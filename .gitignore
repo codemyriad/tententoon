@@ -7,3 +7,7 @@ dist/
 droste-image.jpg
 public/droste-image.jpg
 .gstack/
+scripts/out/
+.antigravitycli/
+gif-quality-shaping.md
+improve-gif-export-needsshaping.md
