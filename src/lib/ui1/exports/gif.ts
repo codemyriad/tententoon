@@ -88,7 +88,7 @@ export async function exportGif({
       | { type: 'error'; error: string };
     if (msg.type === 'frame-encoded') {
       encodedFrames++;
-      onProgress?.({ fraction: 0.5 + (encodedFrames / totalFrames) * 0.5, phase: 'encode' });
+      onProgress?.({ fraction: 0.05 + (encodedFrames / totalFrames) * 0.95, phase: 'encode' });
     } else if (msg.type === 'done') {
       finishResolve?.(msg.bytes);
     } else if (msg.type === 'error') {
@@ -121,8 +121,8 @@ export async function exportGif({
         { type: 'frame', index: i, width, height, rgba: buf },
         [buf]
       );
-      // Render phase represents the first 50% of progress
-      onProgress?.({ fraction: ((i + 1) / totalFrames) * 0.5, phase: 'render' });
+      // Render phase represents the first 5% of progress
+      onProgress?.({ fraction: ((i + 1) / totalFrames) * 0.05, phase: 'render' });
     }
 
     if (signal?.cancelled) throw new Error('cancelled');
