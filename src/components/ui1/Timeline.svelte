@@ -120,7 +120,7 @@
         class="dslider"
         type="range"
         min="1"
-        max="10"
+        max="6"
         step="0.5"
         bind:value={playback.loopLength}
         disabled={!enabled}

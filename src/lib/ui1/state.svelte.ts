@@ -84,7 +84,7 @@ export const playback = $state<{
   t: 0,
   speed: 1,
   direction: 'in',
-  loopLength: 10,
+  loopLength: 3,
   exporting: false
 });
 
