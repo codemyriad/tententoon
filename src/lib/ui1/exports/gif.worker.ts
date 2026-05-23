@@ -83,17 +83,20 @@ self.onmessage = (e: MessageEvent<Inbound>) => {
       // 'rgb565' is the high-quality format with 65,536 color bins
       const globalPalette = quantize(sampleBuf, 256, { format: 'rgb565' });
       
+      const cache = new Uint8Array(65536);
+      const cacheValid = new Uint8Array(65536);
+
       // 2. Dither and encode each frame sequentially
       for (let i = 0; i < frames.length; i++) {
         const frame = frames[i];
         
-        // Apply Floyd-Steinberg dithering with the global palette in rgb565 format
+        // Apply Floyd-Steinberg dithering with the global palette in rgb565 format, sharing the cache
         const indexed = applyPaletteWithDither(
           frame.rgba,
           globalPalette,
           frame.width,
           frame.height,
-          { strength: 0.8 }
+          { strength: 0.8, cache, cacheValid }
         );
         
         // The first frame establishes the Global Color Table (global palette) in the GIF.
