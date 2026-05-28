@@ -24,12 +24,15 @@ export type Theme = 'light-neutral' | 'light-warm' | 'dark-warm';
  *   droste  — the regular nested-rectangle Droste effect with a smooth
  *             self-similar zoom. While this mode is active, exports
  *             and shares capture this animation instead of the spiral.
+ *   pipeline— the 4-panel explorable: rect editor (top-left) + the log,
+ *             rotated-log, and tententoon-still derived panels. A static
+ *             view of the math; playback/exports are irrelevant here.
  * All stages stay mounted in every mode so each one's renderFrame
  * binding survives view switches; the inactive stages are hidden in
  * CSS, which also short-circuits their render effects via 0×0
  * ResizeObserver readouts.
  */
-export type ViewMode = 'split' | 'preview' | 'droste';
+export type ViewMode = 'split' | 'preview' | 'droste' | 'pipeline';
 
 export type Rect = { x: number; y: number; w: number; h: number };
 

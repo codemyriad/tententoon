@@ -19,6 +19,7 @@
   import CanvasStage from './ui1/CanvasStage.svelte';
   import PreviewStage from './ui1/PreviewStage.svelte';
   import DrosteStage from './ui1/DrosteStage.svelte';
+  import PipelinePanel from './ui1/PipelinePanel.svelte';
   import Timeline from './ui1/Timeline.svelte';
   import DropZone from './ui1/DropZone.svelte';
   import {
@@ -132,8 +133,18 @@
             bindRenderFrame={(fn) => (previewRenderFrame = fn)}
           />
           <DrosteStage bindRenderFrame={(fn) => (drosteRenderFrame = fn)} />
+          <!--
+            Pipeline-view derived panels. CanvasStage above is reused as the
+            top-left rect editor; these three fill the rest of the 2×2 grid.
+            Hidden (display:none → inert render effects) in every other view.
+          -->
+          <PipelinePanel kind="log" />
+          <PipelinePanel kind="rotlog" />
+          <PipelinePanel kind="escher" />
         </div>
-        <Timeline />
+        {#if ui.view !== 'pipeline'}
+          <Timeline />
+        {/if}
       </div>
     {/if}
   </div>
@@ -194,10 +205,31 @@
      `split` keeps the editor canvas + spiral; `preview` is spiral-only;
      `droste` is regular-Droste-only. */
   .stages :global(.droste) { display: none; }
+  /* Pipeline's three derived panels are hidden in every non-pipeline view. */
+  .stages :global(.ppanel) { display: none; }
   .stages.view-preview :global(.stage) { display: none; }
   .stages.view-droste :global(.stage),
   .stages.view-droste :global(.preview) { display: none; }
   .stages.view-droste :global(.droste) { display: flex; }
+  /* Pipeline: 2×2 grid. CanvasStage (.stage) is the top-left rect editor;
+     the three .ppanel cells (log · rotated-log · tententoon) follow in DOM
+     order to fill TR / BL / BR. The spiral + droste stages stay hidden. */
+  .stages.view-pipeline {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+  .stages.view-pipeline :global(.preview),
+  .stages.view-pipeline :global(.droste) { display: none; }
+  .stages.view-pipeline :global(.stage) { display: flex; }
+  .stages.view-pipeline :global(.ppanel) { display: flex; }
+  /* Narrow viewports: stack the four panels in a single column. */
+  @media (max-width: 640px) {
+    .stages.view-pipeline {
+      grid-template-columns: 1fr;
+      grid-template-rows: repeat(4, 1fr);
+    }
+  }
   /* Stack the split view vertically only when the viewport is *both*
      narrow AND portrait — phones in landscape have horizontal room
      and side-by-side reads fine there. Stacking on a 844×390 phone
