@@ -23,6 +23,7 @@
 
   let entries = $state<IndexEntry[]>([]);
   let pendingId = $state<string | null>(null);
+  let loadError = $state<string | null>(null);
 
   let renameTarget = $state<IndexEntry | null>(null);
   let deleteTarget = $state<IndexEntry | null>(null);
@@ -41,9 +42,11 @@
   async function onPick(id: string) {
     if (pendingId) return;
     pendingId = id;
+    loadError = null;
     try {
       const ok = await load(id);
       if (ok) onClose();
+      else loadError = 'Picture data is missing for that saved tententoon.';
     } finally {
       pendingId = null;
     }
@@ -111,6 +114,9 @@
     </header>
 
     <div class="body">
+      {#if loadError}
+        <p class="error" role="status">{loadError}</p>
+      {/if}
       {#if entries.length === 0}
         <div class="empty">
           <Icon name="image" size={32} />
@@ -227,6 +233,17 @@
   .body {
     padding: 14px 18px 18px;
     overflow-y: auto;
+  }
+
+  .error {
+    margin: 0 0 12px;
+    padding: 8px 10px;
+    border: 1px solid color-mix(in srgb, #c84a4a 45%, var(--border));
+    border-radius: 7px;
+    background: color-mix(in srgb, #c84a4a 10%, var(--panel));
+    color: var(--ink);
+    font-size: 12.5px;
+    line-height: 1.35;
   }
 
   .grid {

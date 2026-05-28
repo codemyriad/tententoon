@@ -235,6 +235,66 @@ export function performRedo(): void {
 
 export { canUndo, canRedo } from './undo.svelte';
 
+type ResolvedSource = {
+  image: ImageBitmap | null;
+  source: SourceRef | null;
+  missingRequiredSource: boolean;
+};
+
+async function decodeImage(blob: Blob): Promise<ImageBitmap | null> {
+  try {
+    return await createImageBitmap(blob);
+  } catch {
+    return null;
+  }
+}
+
+async function resolveSourceImage(state: TtState, names: string[]): Promise<ResolvedSource> {
+  if (state.source?.kind === 'url') {
+    try {
+      const res = await fetch(state.source.url);
+      if (!res.ok) {
+        return { image: null, source: state.source, missingRequiredSource: true };
+      }
+      const image = await decodeImage(await res.blob());
+      return {
+        image,
+        source: state.source,
+        missingRequiredSource: image === null
+      };
+    } catch {
+      return { image: null, source: state.source, missingRequiredSource: true };
+    }
+  }
+
+  if (state.source?.kind === 'blob') {
+    let blob = await persistence.getBlob(state.source.hash);
+    let source: SourceRef = state.source;
+    if (!blob) {
+      const recovered = await persistence.recoverSourceBlob(state.source, names);
+      if (recovered) {
+        blob = recovered.blob;
+        source = recovered.source;
+      }
+    }
+    const image = blob ? await decodeImage(blob) : null;
+    return {
+      image,
+      source,
+      missingRequiredSource: image === null
+    };
+  }
+
+  const recovered = await persistence.recoverSourceBlob(null, names);
+  if (recovered) {
+    const image = await decodeImage(recovered.blob);
+    if (image) {
+      return { image, source: recovered.source, missingRequiredSource: false };
+    }
+  }
+  return { image: null, source: null, missingRequiredSource: false };
+}
+
 /**
  * Load a tententoon by id. Resolves the source (URL or IDB blob), calls
  * setImage to update the editor, then writes rect/crop/playback from the
@@ -249,35 +309,27 @@ export async function load(id: string): Promise<boolean> {
   const { entry, state } = loaded;
   currentTententoon.hydrating = true;
   try {
-    let image: ImageBitmap | null = null;
-    if (state.source?.kind === 'url') {
-      try {
-        const res = await fetch(state.source.url);
-        if (res.ok) {
-          const blob = await res.blob();
-          image = await createImageBitmap(blob);
-        }
-      } catch {}
-    } else if (state.source?.kind === 'blob') {
-      const blob = await persistence.getBlob(state.source.hash);
-      if (blob) image = await createImageBitmap(blob);
-    }
+    const resolved = await resolveSourceImage(state, [state.imageName, entry.name]);
+    if (resolved.missingRequiredSource) return false;
+    const hydratedState: TtState =
+      resolved.source === state.source ? state : { ...state, source: resolved.source };
+    if (hydratedState !== state) persistence.writeState(entry.id, hydratedState);
     // setImage clears rect/crop/playback, so apply the snapshot AFTER.
-    setImage(image, state.imageName);
-    doc.rect = { ...state.rect };
-    doc.crop = state.crop ? { ...state.crop } : null;
-    playback.speed = state.playback.speed;
-    playback.direction = state.playback.direction;
-    playback.loopLength = state.playback.loopLength;
+    setImage(resolved.image, hydratedState.imageName);
+    doc.rect = { ...hydratedState.rect };
+    doc.crop = hydratedState.crop ? { ...hydratedState.crop } : null;
+    playback.speed = hydratedState.playback.speed;
+    playback.direction = hydratedState.playback.direction;
+    playback.loopLength = hydratedState.playback.loopLength;
     // Resume the user's saved play state. Falls back to autoplay-if-rect
     // for older snapshots that predate persisting `playing`.
     playback.playing =
-      typeof state.playback.playing === 'boolean'
-        ? state.playback.playing
-        : state.rect.w > 0 && state.rect.h > 0;
+      typeof hydratedState.playback.playing === 'boolean'
+        ? hydratedState.playback.playing
+        : hydratedState.rect.w > 0 && hydratedState.rect.h > 0;
     playback.t = 0;
-    ui.view = state.view ?? 'split';
-    knownSource = state.source;
+    ui.view = hydratedState.view ?? 'split';
+    knownSource = hydratedState.source;
     currentTententoon.id = entry.id;
     currentTententoon.name = entry.name;
     persistence.setCurrentId(entry.id);
@@ -286,7 +338,7 @@ export async function load(id: string): Promise<boolean> {
     // have undone before reloading); if no entry matches, hydrateUndo
     // falls back to the head.
     const rows = await persistence.readUndo(entry.id);
-    hydrateUndo(rows, state);
+    hydrateUndo(rows, hydratedState);
     return true;
   } finally {
     currentTententoon.hydrating = false;
