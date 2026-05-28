@@ -122,5 +122,8 @@ public/
 
 ## Licence
 
-The code is released under the MIT licence (see `LICENSE` once added). The default sample
-image carries its own CC BY-SA licence; see `public/ATTRIBUTION.txt`.
+The code is released under the GNU Affero General Public License v3.0 or later; see
+`LICENSE`.
+
+The default sample image is not relicensed as AGPL. It carries its own CC BY-SA 3.0
+licence; see `public/ATTRIBUTION.txt`.

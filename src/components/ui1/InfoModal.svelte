@@ -80,6 +80,12 @@
             <Icon name="external" size={12} />
           </a>
         </li>
+        <li>
+          <a href="https://github.com/codemyriad/tententoon" target="_blank" rel="noopener noreferrer">
+            <span class="lt">Source code &amp; license &mdash; AGPLv3 or later</span>
+            <Icon name="external" size={12} />
+          </a>
+        </li>
       </ul>
     </div>
   </div>

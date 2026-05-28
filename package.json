@@ -2,6 +2,15 @@
   "name": "escher-print-gallery-explorable",
   "private": true,
   "version": "0.0.1",
+  "license": "AGPL-3.0-or-later",
+  "homepage": "https://tententoon.codemyriad.io",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/codemyriad/tententoon.git"
+  },
+  "bugs": {
+    "url": "https://github.com/codemyriad/tententoon/issues"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
