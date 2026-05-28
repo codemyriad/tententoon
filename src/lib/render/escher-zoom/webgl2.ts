@@ -40,8 +40,9 @@ export class WebGL2EscherZoomRenderer implements EscherZoomRenderer {
   private programInfo: twgl.ProgramInfo | null = null;
   private quad: twgl.BufferInfo | null = null;
   private texture: WebGLTexture | null = null;
-  /** Cache key for the uploaded texture so we only re-upload on changes. */
-  private texKey = '';
+  /** Last uploaded source pixels. Same-size images still need a new texture. */
+  private texPixels: ImageData | null = null;
+  private texSampleScale = Number.NaN;
   private maxAniso = 1;
   private contextLost = false;
 
@@ -129,13 +130,13 @@ export class WebGL2EscherZoomRenderer implements EscherZoomRenderer {
     this.programInfo = null;
     this.quad = null;
     this.texture = null;
-    this.texKey = '';
+    this.texPixels = null;
+    this.texSampleScale = Number.NaN;
   }
 
   private uploadTextureIfChanged(pixels: ImageData, sampleScale: number): void {
     const gl = this.gl!;
-    const key = `${pixels.width}x${pixels.height}@${sampleScale}|${pixels.data.byteLength}`;
-    if (key === this.texKey && this.texture) return;
+    if (pixels === this.texPixels && sampleScale === this.texSampleScale && this.texture) return;
 
     if (this.texture) gl.deleteTexture(this.texture);
     const tex = gl.createTexture();
@@ -168,7 +169,8 @@ export class WebGL2EscherZoomRenderer implements EscherZoomRenderer {
       }
     }
     this.texture = tex;
-    this.texKey = key;
+    this.texPixels = pixels;
+    this.texSampleScale = sampleScale;
   }
 
   private handleContextLost = (e: Event): void => {

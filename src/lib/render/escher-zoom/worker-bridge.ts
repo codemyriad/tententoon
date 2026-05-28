@@ -28,7 +28,8 @@ export class WorkerEscherZoomRenderer implements EscherZoomRenderer {
   private mainCanvas: HTMLCanvasElement | null = null;
   private ready = false;
   private failed = false;
-  private pixelsKey = '';
+  private pixels: ImageData | null = null;
+  private pixelsSampleScale = Number.NaN;
 
   constructor(private opts: WorkerBridgeOptions) {}
 
@@ -69,8 +70,7 @@ export class WorkerEscherZoomRenderer implements EscherZoomRenderer {
   render(input: EscherZoomInput): void {
     if (!this.worker || !this.ready || this.failed) return;
     const { pixels } = input;
-    const key = `${pixels.width}x${pixels.height}|${pixels.data.byteLength}|${input.ctx.sampleScale}`;
-    if (key !== this.pixelsKey) {
+    if (pixels !== this.pixels || input.ctx.sampleScale !== this.pixelsSampleScale) {
       // Structured clone of the pixel data — one-time cost per image load
       // (~10–25 ms for a 5 MB buffer per the research). We can't transfer
       // the underlying buffer because other CPU panels still read from it.
@@ -80,7 +80,8 @@ export class WorkerEscherZoomRenderer implements EscherZoomRenderer {
         height: pixels.height,
         data: pixels.data
       });
-      this.pixelsKey = key;
+      this.pixels = pixels;
+      this.pixelsSampleScale = input.ctx.sampleScale;
     }
     this.worker.postMessage({
       type: 'render',
@@ -100,6 +101,7 @@ export class WorkerEscherZoomRenderer implements EscherZoomRenderer {
     }
     this.ready = false;
     this.mainCanvas = null;
-    this.pixelsKey = '';
+    this.pixels = null;
+    this.pixelsSampleScale = Number.NaN;
   }
 }
