@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>What is a tententoon?</title>
+<meta name="description" content="A self-repeating image whose copies spiral as they shrink, in the manner of Escher's Print Gallery — and why such a spiral can close on itself without a seam." />
+<meta property="og:title" content="What is a tententoon?" />
+<meta property="og:description" content="A self-repeating image whose copies spiral as they shrink, in the manner of Escher's Print Gallery." />
+<meta property="og:type" content="article" />
+<meta property="og:image" content="/tententoon-demo.gif" />
+<style>
+  :root {
+    --bg: #faf7f0;
+    --ink: #211c16;
+    --ink-2: #4a463f;
+    --muted: #8c8474;
+    --accent: #d94f2c;
+    --accent-deep: #a83a1d;
+    --rule: #e7e0d2;
+    --panel: #fffdf8;
+    --frame: #2a261f;
+    --maxw: 680px;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+    font-size: 19px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  .sans { font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  a {
+    color: var(--accent-deep);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(168, 58, 29, 0.28);
+    transition: border-color 120ms;
+  }
+  a:hover { border-bottom-color: var(--accent-deep); }
+
+  .topnav {
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    border-bottom: 1px solid var(--rule);
+    background: rgba(250, 247, 240, 0.86);
+    backdrop-filter: blur(6px);
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  .topnav .inner {
+    max-width: var(--maxw);
+    margin: 0 auto;
+    padding: 12px 22px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .topnav .brand { font-weight: 600; color: var(--ink); border: 0; }
+  .topnav .brand b { color: var(--accent); }
+  .topnav a.back { color: var(--ink-2); border: 0; }
+  .topnav a.back:hover { color: var(--accent-deep); }
+
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 22px; }
+
+  header.hero { padding: 64px 0 8px; }
+  .eyebrow {
+    font-family: Inter, system-ui, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-size: 68px;
+    line-height: 1;
+    letter-spacing: -0.025em;
+    margin: 0;
+    font-weight: 600;
+  }
+  .card {
+    position: relative;
+    max-width: 540px;
+    margin: 6px auto 0;
+    padding: 30px 36px 28px;
+    background-color: #f1e6cd;
+    color: #2c2318;
+    border: 1px solid #d6c49d;
+    border-radius: 4px;
+    box-shadow: 0 16px 40px rgba(40, 28, 12, 0.22),
+      inset 0 1px 0 rgba(255, 250, 235, 0.55);
+    transform: rotate(-0.7deg);
+    overflow: hidden;
+    background-image:
+      radial-gradient(circle at 84% 20%, transparent 23px, rgba(108, 70, 26, 0.10) 24px, rgba(108, 70, 26, 0.14) 29px, transparent 31px),
+      radial-gradient(ellipse 130px 96px at 8% 94%, rgba(116, 78, 30, 0.13), transparent 70%),
+      radial-gradient(ellipse 88px 66px at 95% 90%, rgba(116, 78, 30, 0.07), transparent 72%);
+  }
+  .card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.06;
+    mix-blend-mode: multiply;
+    pointer-events: none;
+  }
+  .card > * { position: relative; z-index: 1; }
+  .card-mark {
+    position: absolute;
+    top: 18px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    color: #b0651f;
+    opacity: 0.5;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.3;
+  }
+  .card-mark rect { vector-effect: non-scaling-stroke; }
+  .headline {
+    margin: 0 60px 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 13px;
+  }
+  .hw {
+    font-size: 39px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.04;
+  }
+  .ipa { font-size: 16px; font-style: italic; color: #7c6c4d; }
+  .pos { font-size: 15px; font-style: italic; color: #7c6c4d; }
+  .sense {
+    margin: 17px 0 0;
+    font-size: 19px;
+    line-height: 1.5;
+  }
+  .sense .num { font-weight: 700; margin-right: 5px; }
+  .sense em { font-style: italic; }
+  .eg {
+    margin: 8px 0 0 16px;
+    font-size: 16px;
+    line-height: 1.5;
+    color: #6a5b40;
+  }
+  .eg .dot { color: #b0651f; }
+  .eg em { font-style: italic; }
+  .origin {
+    margin: 18px 0 0;
+    padding-top: 14px;
+    border-top: 1px solid rgba(150, 120, 70, 0.32);
+    font-size: 14.5px;
+    line-height: 1.6;
+    color: #5c4e38;
+  }
+  .origin .lbl {
+    font-family: Inter, system-ui, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #9a7c4a;
+    margin-right: 7px;
+  }
+  .origin em { font-style: italic; }
+  .title { font-style: italic; }
+  .title b { color: #b0531f; font-weight: 700; font-style: italic; }
+
+  h2 {
+    font-size: 30px;
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+    margin: 2.6em 0 0.6em;
+    font-weight: 600;
+  }
+  p { margin: 1em 0; }
+  strong, b { font-weight: 700; }
+
+  figure { margin: 2.2em 0; }
+  .frame {
+    background: var(--frame);
+    padding: 14px;
+    border-radius: 9px;
+    box-shadow: 0 14px 38px rgba(20, 14, 10, 0.20);
+  }
+  .frame img { display: block; width: 100%; height: auto; border-radius: 3px; }
+  figcaption {
+    margin-top: 0.8em;
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--muted);
+    text-align: center;
+  }
+  .fig-droste { max-width: 560px; margin-left: auto; margin-right: auto; }
+  .fig-spiral { max-width: 380px; margin-left: auto; margin-right: auto; }
+
+  .pull {
+    font-size: 27px;
+    line-height: 1.38;
+    font-style: italic;
+    color: var(--ink);
+    border-left: 3px solid var(--accent);
+    padding-left: 24px;
+    margin: 2.4em 0;
+  }
+  .pull b { color: var(--accent-deep); font-style: italic; }
+
+  .aside {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13.5px;
+    line-height: 1.7;
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 9px;
+    padding: 15px 17px;
+    color: var(--ink-2);
+    margin: 1.7em 0;
+  }
+  .aside .lbl {
+    display: block;
+    font-family: Inter, system-ui, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--muted);
+    margin-bottom: 7px;
+  }
+  .aside b { color: var(--accent-deep); }
+
+  .cta-row { margin: 2em 0 1em; }
+  .cta {
+    display: inline-block;
+    font-family: Inter, system-ui, sans-serif;
+    font-weight: 600;
+    font-size: 16px;
+    background: var(--accent);
+    color: #fff;
+    border: 0;
+    border-radius: 11px;
+    padding: 14px 24px;
+    box-shadow: 0 8px 22px rgba(217, 79, 44, 0.32);
+  }
+  .cta:hover { background: var(--accent-deep); border: 0; }
+
+  footer {
+    margin: 3.4em 0 4.5em;
+    padding-top: 1.5em;
+    border-top: 1px solid var(--rule);
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--muted);
+  }
+  footer p { margin: 0.5em 0; }
+  footer a { color: var(--muted); border-bottom-color: rgba(140, 132, 116, 0.4); }
+  footer a:hover { color: var(--ink-2); }
+
+  @media (max-width: 640px) {
+    body { font-size: 17.5px; }
+    header.hero { padding: 40px 0 4px; }
+    h1 { font-size: 46px; }
+    h2 { font-size: 25px; }
+    .card { padding: 24px 22px 22px; transform: rotate(-0.5deg); }
+    .headline { margin-right: 50px; }
+    .hw { font-size: 30px; }
+    .card-mark { width: 48px; height: 48px; top: 14px; right: 14px; }
+    .sense { font-size: 17.5px; }
+    .eg { font-size: 15px; }
+    .pull { font-size: 22px; padding-left: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="inner">
+    <a class="brand" href="/">ten<b>ten</b>toon</a>
+    <a class="back" href="/">open the tool&nbsp;&rarr;</a>
+  </div>
+</nav>
+
+<div class="wrap">
+
+  <header class="hero">
+    <div class="card">
+      <svg class="card-mark" viewBox="-50 -50 100 100" aria-hidden="true">
+        <g>
+          <rect x="-44" y="-44" width="88" height="88" rx="1.5"/>
+          <g transform="rotate(22) scale(0.8)">
+            <rect x="-44" y="-44" width="88" height="88" rx="1.5"/>
+            <g transform="rotate(22) scale(0.8)">
+              <rect x="-44" y="-44" width="88" height="88" rx="1.5"/>
+              <g transform="rotate(22) scale(0.8)">
+                <rect x="-44" y="-44" width="88" height="88" rx="1.5"/>
+                <g transform="rotate(22) scale(0.8)">
+                  <rect x="-44" y="-44" width="88" height="88" rx="1.5"/>
+                  <g transform="rotate(22) scale(0.8)">
+                    <rect x="-44" y="-44" width="88" height="88" rx="1.5"/>
+                    <g transform="rotate(22) scale(0.8)">
+                      <rect x="-44" y="-44" width="88" height="88" rx="1.5"/>
+                    </g>
+                  </g>
+                </g>
+              </g>
+            </g>
+          </g>
+        </g>
+      </svg>
+
+      <p class="headline">
+        <span class="hw">ten&middot;ten&middot;toon</span>
+        <span class="ipa">/&#716;t&#603;n.t&#603;n&#712;to&#720;n/</span>
+        <span class="pos">noun</span>
+      </p>
+
+      <p class="sense">
+        <span class="num">1.</span> a self-repeating image whose copies spiral as
+        they shrink, in the manner of M.&nbsp;C.&nbsp;Escher's
+        <em>Print&nbsp;Gallery</em>.
+      </p>
+      <p class="eg"><span class="dot">&bull;</span> <em>a tententoon of the old
+        gallery, winding inward without end.</em></p>
+
+      <p class="origin">
+        <span class="lbl">Origin</span>
+        coined from the Dutch <span class="title">Pren<b>tententoon</b>stelling</span>
+        (&ldquo;print exhibition&rdquo;): <em>prenten</em>, prints +
+        <em>tentoonstelling</em>, exhibition &mdash; the word lifted from where
+        the two halves meet.
+      </p>
+    </div>
+  </header>
+
+  <h2>First, the easy version</h2>
+  <p>
+    Put a picture inside itself. Then put it inside <em>that</em> copy, and inside
+    the next, and don't stop.
+  </p>
+
+  <figure class="fig-droste">
+    <div class="frame">
+      <img src="/Droste_1260359-nevit.jpg" alt="A photograph of a person holding a picture frame; inside the frame is the same person holding the same frame, repeating into the distance." loading="lazy" />
+    </div>
+    <figcaption>
+      A real photograph &mdash; a frame, inside a frame, inside a frame. The effect
+      is named after a tin of Droste cocoa that pulled the same trick back in&nbsp;1904.
+    </figcaption>
+  </figure>
+
+  <p>
+    Every copy sits squarely inside the one before it. The picture drops
+    <em>straight down</em> into itself, shrinking by the same step each time,
+    forever. That is the <strong>Droste effect</strong>, and you have seen it a
+    hundred times.
+  </p>
+
+  <h2>Now bend it</h2>
+  <p>
+    Here is a stranger question. What if each copy does not only shrink &mdash;
+    what if it also <em>turns?</em>
+  </p>
+
+  <figure class="fig-spiral">
+    <div class="frame">
+      <img src="/tententoon-demo.gif" alt="The same photograph, but the nested copies rotate as they shrink, winding the whole image into a smooth spiral." loading="lazy" />
+    </div>
+    <figcaption>The same photograph, bent. Made with this tool.</figcaption>
+  </figure>
+
+  <p>
+    Same picture. Same rule &mdash; a copy, inside a copy, inside a copy. But now
+    every copy is rotated a little as it shrinks, and the whole stack winds up
+    into a spiral. Watch the edges: straight lines bow into curves, the room
+    twists &mdash; and nothing tears. Follow any line inward and it meets itself
+    exactly. Zoom forever and you never find a seam.
+  </p>
+  <p>That second picture is a <strong>tententoon</strong>.</p>
+
+  <p class="pull">
+    Same picture. Two infinities. One drops straight down; the other takes the
+    scenic route &mdash; and <b>still arrives on time.</b>
+  </p>
+
+  <h2>Why doesn't it tear?</h2>
+  <p>
+    All of it comes from one move: <strong>take the logarithm.</strong>
+  </p>
+  <p>
+    Shrinking-and-repeating is really multiplication &mdash; each copy is the last
+    one times some fixed ratio. And the one thing logarithms do for a living is
+    turn multiplication into addition. So look at the Droste picture through a
+    logarithm and &ldquo;shrink, then repeat&rdquo; becomes &ldquo;slide over, then
+    repeat&rdquo;: the endless nested frames unroll into a plain, evenly-spaced
+    grid. Straight. Boring. Repeating.
+  </p>
+  <p>
+    Now add the turn. A copy that shrinks <em>and</em> rotates is, in this
+    logarithm-world, a slide in two directions at once &mdash; sideways <em>and</em>
+    along. So the straight grid simply <strong>tilts</strong>. Tilt a repeating
+    grid, then roll it back up out of the logarithm, and that tilt becomes a
+    spiral. A tententoon is just Escher's straight Droste, leaning over.
+  </p>
+  <p>
+    And here is why it never tears. In logarithm-world the picture is only a
+    pattern that repeats every fixed step. Slide it by exactly one step and you
+    land on an identical picture &mdash; you cannot tell it moved. Roll that back
+    up, and &ldquo;one step&rdquo; becomes &ldquo;one full turn of the spiral.&rdquo;
+    The loop closes because the shift closes. The seam isn't hidden; there simply
+    isn't one.
+  </p>
+  <div class="aside">
+    <span class="lbl">for the curious</span>
+    Every point <b>z</b> in the picture becomes <b>log(z &minus; c)</b>, measured from
+    the centre <b>c</b>. One copy of the whole image is then the map<br />
+    &nbsp;&nbsp;<b>log(z &minus; c) &rarr; log(z &minus; c) + log&nbsp;S + i&theta;</b><br />
+    &mdash; a shift of <b>log&nbsp;S</b> along the real axis (that's the zoom) and
+    <b>&theta;</b> around the imaginary one (that's the rotation). One complex number
+    carries both at once. That is the entire trick.
+  </div>
+
+  <h2>Escher got there first &mdash; by hand</h2>
+  <p>
+    Escher had no computer in 1956. He worked the curved grid out by eye, ruled it
+    onto the canvas, and painted a gallery, a print, a town, and the gallery again
+    into the bend. And he got it <em>right</em> &mdash; the mathematics later showed
+    his intuition was very nearly exact.
+  </p>
+  <p>
+    But a spiral tightens forever toward its centre, and a pen can only go so fine.
+    So Escher stopped, left a soft white patch in the middle of the picture, curled
+    his signature into it, and called it finished. The one place the picture could
+    not finish itself.
+  </p>
+
+  <h2>The theorem that filled the hole</h2>
+  <p>
+    In 2003, two mathematicians in Leiden &mdash; <strong>Bart de&nbsp;Smit</strong>
+    and <strong>Hendrik Lenstra</strong> &mdash; wrote down the exact map hiding in
+    Escher's grid. The idealised <em>Print Gallery</em>, they showed, contains a
+    complete copy of itself rotated by <strong>157.6256&deg;</strong> and shrunk by a
+    factor of <strong>22.5837</strong>. Pin those two numbers down and the entire
+    picture is determined &mdash; including the part Escher left blank.
+  </p>
+  <p>
+    With the map in hand, they let a computer do what a pen could not: continue the
+    spiral inward, far past the reach of any hand, and close the white hole at last.
+  </p>
+
+  <h2>See it move</h2>
+  <p>
+    If you'd like the whole argument in motion, <strong>Grant Sanderson</strong>
+    (of <em>3Blue1Brown</em>) made a beautiful animated tour of the paper in 2026.
+    It is the clearest walk through the mathematics there is &mdash;
+    <a href="https://www.youtube.com/watch?v=ldxFjLJ3rVY" target="_blank" rel="noopener noreferrer">watch it here</a>.
+  </p>
+
+  <h2>Now make one</h2>
+  <p>
+    This tool does the bending for you. Drop in any photo, draw the rectangle where
+    the next copy should sit, and flip between the two infinities: the straight
+    Droste fall, or the tententoon spiral. Export the loop as a PNG, a GIF, or a
+    video. It all runs in your browser &mdash; no upload, no account, no server.
+  </p>
+  <div class="cta-row">
+    <a class="cta" href="/">Open the tool&nbsp;&rarr;</a>
+  </div>
+
+  <footer>
+    <p>
+      <em>Prentententoonstelling</em> (&ldquo;<em>Print Gallery</em>&rdquo;),
+      M.&nbsp;C.&nbsp;Escher, lithograph, 1956. Escher's works are
+      &copy;&nbsp;The&nbsp;M.&nbsp;C.&nbsp;Escher&nbsp;Company &mdash; shown here by
+      description and link, not reproduction.
+    </p>
+    <p>
+      &ldquo;The Mathematical Structure of Escher's Print Gallery,&rdquo;
+      B.&nbsp;de&nbsp;Smit &amp; H.&nbsp;W.&nbsp;Lenstra&nbsp;Jr.,
+      <a href="https://www.ams.org/notices/200304/fea-escher.pdf" target="_blank" rel="noopener noreferrer">Notices of the AMS, 2003</a>.
+      See also <a href="https://en.wikipedia.org/wiki/Print_Gallery_(M._C._Escher)" target="_blank" rel="noopener noreferrer">Wikipedia: Print Gallery</a>.
+    </p>
+    <p>
+      Demonstration photograph: &ldquo;Droste effect&rdquo; by
+      <a href="https://commons.wikimedia.org/wiki/File:Droste_1260359-nevit.jpg" target="_blank" rel="noopener noreferrer">Nevit&nbsp;Dilmen</a>,
+      <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener noreferrer">CC&nbsp;BY-SA&nbsp;3.0</a>.
+    </p>
+  </footer>
+
+</div>
+</body>
+</html>
