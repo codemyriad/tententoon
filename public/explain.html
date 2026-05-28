@@ -240,6 +240,11 @@
     margin-bottom: 7px;
   }
   .aside b { color: var(--accent-deep); }
+  .steps { margin: 1.5em 0; padding-left: 1.35em; }
+  .steps li { margin: 0.9em 0; line-height: 1.55; padding-left: 0.25em; }
+  .steps li::marker { color: var(--accent); font-weight: 700; }
+  .steps em { font-style: italic; }
+  .steps sup { font-size: 0.72em; }
 
   .cta-row { margin: 2em 0 1em; }
   .cta {
@@ -422,15 +427,43 @@
     The loop closes because the shift closes. The seam isn't hidden; there simply
     isn't one.
   </p>
-  <div class="aside">
-    <span class="lbl">for the curious</span>
-    Every point <b>z</b> in the picture becomes <b>log(z &minus; c)</b>, measured from
-    the centre <b>c</b>. One copy of the whole image is then the map<br />
-    &nbsp;&nbsp;<b>log(z &minus; c) &rarr; log(z &minus; c) + log&nbsp;S + i&theta;</b><br />
-    &mdash; a shift of <b>log&nbsp;S</b> along the real axis (that's the zoom) and
-    <b>&theta;</b> around the imaginary one (that's the rotation). One complex number
-    carries both at once. That is the entire trick.
-  </div>
+  <h2>The same trick, in four pictures</h2>
+  <p>Here is the whole move, broken into the four frames the mathematics actually passes through.</p>
+  <ol class="steps">
+    <li>
+      <strong>The picture, and a rectangle.</strong> Mark where the next copy
+      belongs. That single choice fixes everything else: how far each copy shrinks
+      (call it <em>S</em>), and the one point <em>c</em> that all the copies rush
+      toward.
+    </li>
+    <li>
+      <strong>Unroll it &mdash; log(z &minus; c).</strong> Re-measure every point by
+      how far it sits from <em>c</em> and at what angle, then take the logarithm of
+      the distance. The endless nested frames flatten into a plain, repeating
+      <em>lattice</em>: step sideways by <em>log&nbsp;S</em> and you have moved one
+      Droste jump; step up or down by <em>2&pi;</em> and you have gone once around
+      <em>c</em>. Straight. Boring. Tiling forever.
+    </li>
+    <li>
+      <strong>Lean it over.</strong> Tilt that lattice by a fixed angle,
+      <em>&beta; = arctan(log&nbsp;S / 2&pi;)</em>. Nothing tears: a pattern that
+      repeats every tile looks identical after you slide it by one tile, so it
+      survives the lean unscarred. That lean is the whole difference between a
+      Droste and an Escher.
+    </li>
+    <li>
+      <strong>Roll it back up.</strong> Undo the logarithm and the tilted lattice
+      winds into the tententoon &mdash; one seamless spiral. In a single line it is
+      the map <em>w(z) = c + (z &minus; c)<sup>&alpha;</sup></em> with
+      <em>&alpha; = 1 &minus; i&middot;(log&nbsp;S / 2&pi;)</em>: the real part
+      carries the picture, the imaginary part is the lean.
+    </li>
+  </ol>
+  <p>
+    The same photograph sits in all four frames; only the ruler changes. The seam
+    never shows because in the two flat middle frames there is nothing to tear
+    &mdash; only a pattern, repeating.
+  </p>
 
   <h2>Escher got there first &mdash; by hand</h2>
   <p>
