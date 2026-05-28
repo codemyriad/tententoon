@@ -43,6 +43,15 @@
   >
     <Icon name="viewDroste" />
   </button>
+  <button
+    class="tool"
+    class:active={ui.view === 'pipeline'}
+    title="Pipeline (log · rotated log · tententoon)"
+    aria-label="Pipeline view"
+    onclick={() => setView('pipeline')}
+  >
+    <Icon name="viewPipeline" />
+  </button>
   <div class="spacer"></div>
   <!-- Self-hides on browsers without navigator.canShare for files. -->
   <ShareMenu {renderFrame} />
