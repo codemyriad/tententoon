@@ -49,12 +49,31 @@ export const ROT_V_PERIODS = 1;
 const TWO_PI = 2 * Math.PI;
 
 /**
+ * Below this logS the selection is degenerate — the nest nearly fills its
+ * working frame (S ≈ 1), so there's no Droste structure to show and the
+ * fold would divide by ~0. Panels surface a hint instead of rendering.
+ */
+export const MIN_LOGS = 0.01;
+
+/**
  * Log-radius anchored at the canvas centre. Both log panels fill the whole
  * cell with the (doubly-periodic) lattice; the anchor just decides which
  * part is centred — log(rMax) puts the outer ring in the middle.
  */
 export function panelURef(rMax: number): number {
   return Math.log(Math.max(rMax, 1));
+}
+
+/**
+ * Wrap a log-radius into the outermost Droste ring (uRef − logS, uRef]. Log
+ * space repeats with period logS, so the wrapped u samples identical content
+ * (self-similarity) but always from the sharp outer ring — independent of how
+ * many fold steps a small logS would otherwise need. Keeps the lattice
+ * seamless and black-free for every valid selection.
+ */
+function wrapToTopRing(u: number, uRef: number, logS: number): number {
+  const m = (((uRef - u) % logS) + logS) % logS;
+  return uRef - m;
 }
 
 /**
@@ -145,7 +164,7 @@ export function renderLogPanel(
   const h = out.height;
   const inv = 1 / pxPerUnit;
   renderMappedDroste(asImageData(out), pixels, ctx, (px, py, s) => {
-    const u = (px - w / 2) * inv + uRef;
+    const u = wrapToTopRing((px - w / 2) * inv + uRef, uRef, ctx.logS);
     const v = (py - h / 2) * inv;
     const r = Math.exp(u);
     s.x = ctx.cx + r * Math.cos(v);
@@ -182,7 +201,7 @@ export function renderRotatedLogPanel(
   renderMappedDroste(asImageData(out), pixels, ctx, (px, py, s) => {
     const cu = (px - w / 2) * inv;
     const cv = (py - h / 2) * inv;
-    const u = cu * cosB + cv * sinB + uRef;
+    const u = wrapToTopRing(cu * cosB + cv * sinB + uRef, uRef, ctx.logS);
     const v = -cu * sinB + cv * cosB;
     const r = Math.exp(u);
     s.x = ctx.cx + r * Math.cos(v);

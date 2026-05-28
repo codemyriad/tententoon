@@ -77,6 +77,12 @@ void main() {
       u = cu + u_uRef;
       v = cv;
     }
+    // Wrap u into the outermost Droste ring (uRef − logS, uRef]. Log space
+    // repeats with period logS, so this samples identical content (Droste
+    // self-similarity) but always from the sharp outer ring — no dependence
+    // on how many fold steps small logS would otherwise need, hence no
+    // black at the edges and a sharper image.
+    u = u_uRef - mod(u_uRef - u, u_logS);
     float r = exp(u);
     src = u_c + r * vec2(cos(v), sin(v));
     footA = r / u_pxPerUnit;

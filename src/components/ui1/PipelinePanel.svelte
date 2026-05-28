@@ -31,6 +31,7 @@
     renderEscherStill,
     panelPxPerUnit,
     panelURef,
+    MIN_LOGS,
     type PanelImage
   } from '../../lib/ui1/pipeline-panels';
 
@@ -65,6 +66,10 @@
     if (!active || !doc.image || !hasRect || !doc.crop) return null;
     return buildPanelGeometry(doc.rect, doc.crop);
   });
+
+  // Nest nearly fills its frame (S ≈ 1): no Droste structure to show, and the
+  // fold would divide by ~0. Surface a hint instead of rendering black.
+  const degenerate = $derived(!!geom && geom.ctx.logS < MIN_LOGS);
 
   // Letterboxed CSS footprint. Escher preserves the crop aspect; the log
   // panels fill the whole cell (the lattice tiles infinitely).
@@ -141,7 +146,7 @@
 
   // rAF-coalesced render: re-runs on any reactive input, draws once/frame.
   $effect(() => {
-    if (!canvas || !geom || !fit || !doc.image) return;
+    if (!canvas || !geom || !fit || !doc.image || degenerate) return;
     if (useGL && !glRenderer) return;
     const g = geom;
     const f = fit;
@@ -181,7 +186,7 @@
 
 <section class="ppanel">
   <div class="viewport" bind:this={viewport}>
-    {#if doc.image && geom && fit}
+    {#if doc.image && geom && fit && !degenerate}
       <canvas
         bind:this={canvas}
         style:left="{fit.offX}px"
@@ -195,6 +200,8 @@
       </div>
     {:else if !doc.image}
       <div class="hint mono">Load an image first.</div>
+    {:else if degenerate}
+      <div class="hint mono">Shrink the rectangle — it nearly fills the frame, so there's no spiral yet.</div>
     {:else}
       <div class="hint mono">Draw a rectangle to see {TITLES[kind]}.</div>
     {/if}

@@ -145,6 +145,26 @@ describe('pipeline-panels', () => {
     dump('3-tententoon.jpg', img);
   });
 
+  it('fills log/rotlog with no black for a large nest (small logS, via top-ring wrap)', () => {
+    // A nest that nearly fills its frame → small logS. Without wrapping u into
+    // the outer ring, the 11-step fold cannot reach the extreme radii and the
+    // panel edges go black. With it, every pixel samples the sharp top ring.
+    const bigNest: Rect = { x: 40, y: 40, w: 1100, h: 820 };
+    const bigCrop = fitCropToNest(image, bigNest, null);
+    const g = buildPanelGeometry(bigNest, bigCrop)!;
+    expect(g.ctx.logS).toBeLessThan(0.3); // genuinely small
+    expect(g.ctx.logS).toBeGreaterThan(0.01);
+    const ppu = panelPxPerUnit('log', g.ctx.logS, 256);
+    const ur = panelURef(g.ctx.rMax);
+    const logImg = renderLogPanel(pixels, g.ctx, ppu, ur, 320, 256);
+    const rotImg = renderRotatedLogPanel(
+      pixels, g.ctx, panelPxPerUnit('rotlog', g.ctx.logS, 256), ur, 320, 256
+    );
+    expect(opaqueFraction(logImg)).toBeGreaterThan(0.999);
+    expect(opaqueFraction(rotImg)).toBeGreaterThan(0.999);
+    dump('4-log-largenest.jpg', logImg);
+  });
+
   it('produces tiny but valid output for sub-2px panels (no crash)', () => {
     const ppu = panelPxPerUnit('log', geom!.ctx.logS, 1);
     const img = renderLogPanel(pixels, geom!.ctx, ppu, uRef, 1, 1);
