@@ -46,6 +46,7 @@
    */
 
   import { doc, playback } from '../../lib/ui1/state.svelte';
+  import { buildDrosteFrameParams, workingCrop } from '../../lib/ui1/droste-frame';
 
   type Props = {
     bindRenderFrame?: (fn: (off: HTMLCanvasElement, t: number) => Promise<void>) => void;
@@ -59,24 +60,20 @@
 
   const hasRect = $derived(doc.rect.w > 0 && doc.rect.h > 0);
 
-  // sx, sy guard: a degenerate rect (full image or larger) gives sx≥1
-  // and the fixed-point formula blows up. We refuse to render in that
-  // case — the user sees the "draw a rectangle" hint until they pick a
-  // proper one.
+  // sx, sy guard: a degenerate rect (full crop or larger) gives sx≥1
+  // and the fixed-point formula blows up. The Droste math runs in the
+  // crop's local coordinate space, matching the spiral renderer: the
+  // crop is the working image and the nest is translated into it.
   const params = $derived.by(() => {
     if (!doc.image || !hasRect) return null;
-    const W = doc.image.width;
-    const H = doc.image.height;
-    const sx = doc.rect.w / W;
-    const sy = doc.rect.h / H;
-    if (!(sx > 0 && sx < 1 && sy > 0 && sy < 1)) return null;
-    return { W, H, sx, sy, Rx: doc.rect.x, Ry: doc.rect.y };
+    return buildDrosteFrameParams(doc.image, doc.rect, doc.crop);
   });
 
   const fit = $derived.by(() => {
     if (!doc.image || viewW <= 0 || viewH <= 0) return null;
-    const iw = doc.image.width;
-    const ih = doc.image.height;
+    const crop = workingCrop(doc.image, doc.crop);
+    const iw = crop.w;
+    const ih = crop.h;
     const ia = iw / ih;
     const va = viewW / viewH;
     let w: number, h: number;
@@ -122,7 +119,7 @@
    */
   function drawFrame(target: HTMLCanvasElement, t: number): void {
     if (!params || !doc.image) return;
-    const { W, H, sx, sy, Rx, Ry } = params;
+    const { W, H, sx, sy, Rx, Ry, cropX, cropY, cropW, cropH } = params;
     const effT = playback.direction === 'in' ? t : 1 - t;
     const scaleX = Math.pow(sx, effT);
     const scaleY = Math.pow(sy, effT);
@@ -179,7 +176,7 @@
       // (Common when the rect is well off-centre and very deep levels
       // sit far from the camera centre.)
       if (xn + rw >= camX && xn <= camX + camW && yn + rh >= camY && yn <= camY + camH) {
-        ctx.drawImage(doc.image, xn, yn, rw, rh);
+        ctx.drawImage(doc.image, cropX, cropY, cropW, cropH, xn, yn, rw, rh);
       }
       xn += Rx * pxw;
       yn += Ry * pyw;
