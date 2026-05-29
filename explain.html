@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>What is a tententoon?</title>
-<meta name="description" content="A self-repeating image whose copies spiral as they shrink, in the manner of Escher's Print Gallery — and why such a spiral can close on itself without a seam. With a live, draggable log." />
+<meta name="description" content="A self-repeating image whose copies spiral as they shrink, in the manner of Escher's Print Gallery, and why such a spiral can close on itself without a seam. With a live, draggable log." />
 <meta property="og:title" content="What is a tententoon?" />
 <meta property="og:description" content="A self-repeating image whose copies spiral as they shrink, in the manner of Escher's Print Gallery." />
 <meta property="og:type" content="article" />
@@ -424,7 +424,7 @@
         <span class="lbl">Origin</span>
         coined from the Dutch <span class="title">Pren<b>tententoon</b>stelling</span>
         (&ldquo;print exhibition&rdquo;): <em>prenten</em>, prints +
-        <em>tentoonstelling</em>, exhibition &mdash; the word lifted from where
+        <em>tentoonstelling</em>, exhibition. The coined word sits right where
         the two halves meet.
       </p>
     </div>
@@ -441,7 +441,7 @@
       <img src="/Droste_1260359-nevit.jpg" alt="A photograph of a person holding a picture frame; inside the frame is the same person holding the same frame, repeating into the distance." loading="lazy" />
     </div>
     <figcaption>
-      A real photograph &mdash; a frame, inside a frame, inside a frame. The effect
+      A real photograph: a frame, inside a frame, inside a frame. The effect
       is named after a tin of Droste cocoa that pulled the same trick back in&nbsp;1904.
     </figcaption>
   </figure>
@@ -455,8 +455,8 @@
 
   <h2>Now bend it</h2>
   <p>
-    Here is a stranger question. What if each copy does not only shrink &mdash;
-    what if it also <em>turns?</em>
+    Here is a stranger question. What if each copy does not only shrink? What
+    if it also <em>turns?</em>
   </p>
 
   <figure class="solo-panel live-panels">
@@ -464,7 +464,7 @@
       <span class="plabel">tententoon</span>
       <canvas id="exp-escher"></canvas>
     </div>
-    <figcaption>A live <strong>tententoon</strong> &mdash; the source, wound into a spiral.</figcaption>
+    <figcaption>A live <strong>tententoon</strong>: the source, wound into a spiral.</figcaption>
   </figure>
   <div class="exp-controls">
     <label class="angle-ctl">twist&nbsp;<em>&beta;</em> <input type="range" id="exp-angle" aria-label="twist angle" /> <span class="aval" id="exp-angle-val"></span></label>
@@ -472,16 +472,16 @@
   </div>
 
   <p>
-    Same picture. Same rule &mdash; a copy, inside a copy, inside a copy. But now
-    every copy is rotated a little as it shrinks, and the whole stack winds up
-    into a spiral. Watch the edges: straight lines bow into curves, the room
-    twists &mdash; and nothing tears. Follow any line inward and it meets itself
-    exactly. Zoom forever and you never find a seam.
+    Same picture. Same rule: a copy, inside a copy, inside a copy. But now every
+    copy is rotated a little as it shrinks, and the whole stack winds up into a
+    spiral. Watch the edges: straight lines bow into curves, the room twists, and
+    nothing tears. Follow any line inward and it meets itself exactly. Zoom
+    forever and you never find a seam.
   </p>
 
   <p class="pull">
     Same picture. Two infinities. One drops straight down; the other takes the
-    scenic route &mdash; and <b>still arrives on time.</b>
+    scenic route, and <b>still arrives on time.</b>
   </p>
 
   <h2>Why doesn't it tear?</h2>
@@ -491,19 +491,19 @@
   <p>
     Measure every point by how far it sits from the centre <em>c</em> and at what
     angle, then take the logarithm of the distance. Shrinking-and-repeating is
-    multiplication, and logarithms turn multiplication into addition &mdash; so the
+    multiplication, and logarithms turn multiplication into addition, so the
     endless nested frames unroll into a plain, repeating <em>lattice</em>: step
     sideways by <em>log&nbsp;S</em> for one Droste jump, up or down by <em>2&pi;</em>
     for one full turn around <em>c</em>. Straight. Boring. Tiling forever.
   </p>
   <p>
-    And here is the surprise &mdash; in your fingertips. The panel on the left is
-    that lattice, <strong>log(z &minus; c)</strong>. <strong>Drag it.</strong> A
+    And here is the surprise, in your fingertips. The panel on the left is that
+    lattice, <strong>log(z &minus; c)</strong>. <strong>Drag it.</strong> A
     sideways drag <em>zooms</em> the original on the right; an up-and-down drag
     <em>rotates</em> it. A slide in the log is nothing but a rotate-and-zoom back
-    in the original picture &mdash; that is the whole trick, and the readout keeps
-    the score. Feed the same machine something cleaner, too: a grid, or polar
-    circles &mdash; each ring styled so you can follow it through the bend.
+    in the original picture. That is the whole trick, and the readout keeps the
+    score. Feed the same machine something cleaner, too: a grid, or polar circles
+    with each ring styled so you can follow it through the bend.
   </p>
 
   <div class="exp-controls">
@@ -530,7 +530,7 @@
     </div>
   </figure>
   <div class="exp-controls">
-    <span class="readout" id="exp-readout">drag the log panel &mdash; &harr; zoom, &updownarrow; rotate the original</span>
+    <span class="readout" id="exp-readout">drag the log panel: &harr; zoom, &updownarrow; rotate the original</span>
     <button type="button" id="exp-reset">reset</button>
   </div>
   <p class="exp-fallback" id="exp-fallback" hidden>
@@ -540,9 +540,8 @@
 
   <p>
     Now add the turn for real. A copy that shrinks <em>and</em> rotates leans that
-    lattice over by a fixed angle, <em>&beta; = arctan(log&nbsp;S / 2&pi;)</em>
-    &mdash; the one tilt that lets the pattern still line up with itself after a
-    slide:
+    lattice over by a fixed angle, <em>&beta; = arctan(log&nbsp;S / 2&pi;)</em>. It
+    is the one tilt that lets the pattern line up with itself again after a slide:
   </p>
 
   <figure class="solo-panel live-panels">
@@ -555,25 +554,25 @@
 
   <p>
     Roll the logarithm back up and the tilted lattice winds into the spiral you saw
-    above &mdash; the tententoon. In a single line it is the map
+    above: the tententoon. In a single line it is the map
     <em>w(z) = c + (z &minus; c)<sup>&alpha;</sup></em> with
     <em>&alpha; = 1 &minus; i&middot;(log&nbsp;S / 2&pi;)</em>: the real part carries
     the picture, the imaginary part is the lean.
   </p>
   <p>
-    And here is why it never tears. In the lattice there is nothing to tear &mdash;
+    And here is why it never tears. In the lattice there is nothing to tear,
     only a pattern that repeats. Slide it by exactly one tile and you land on an
     identical picture; roll that back up and &ldquo;one tile&rdquo; becomes
     &ldquo;one full turn of the spiral.&rdquo; The loop closes because the shift
     closes. The seam isn't hidden; there simply isn't one.
   </p>
 
-  <h2>Escher got there first &mdash; by hand</h2>
+  <h2>Escher got there first, by hand</h2>
   <p>
     Escher had no computer in 1956. He worked the curved grid out by eye, ruled it
     onto the canvas, and painted a gallery, a print, a town, and the gallery again
-    into the bend. And he got it <em>right</em> &mdash; the mathematics later showed
-    his intuition was very nearly exact.
+    into the bend. And he got it <em>right</em>: the mathematics later showed his
+    intuition was very nearly exact.
   </p>
   <p>
     But a spiral tightens forever toward its centre, and a pen can only go so fine.
@@ -582,25 +581,27 @@
     not finish itself.
   </p>
 
-  <h2>The theorem that filled the hole</h2>
+  <h2>The map that filled the hole</h2>
   <p>
-    In 2003, two mathematicians in Leiden &mdash; <strong>Bart de&nbsp;Smit</strong>
-    and <strong>Hendrik Lenstra</strong> &mdash; wrote down the exact map hiding in
-    Escher's grid. The idealised <em>Print Gallery</em>, they showed, contains a
-    complete copy of itself rotated by <strong>157.6256&deg;</strong> and shrunk by a
-    factor of <strong>22.5837</strong>. Pin those two numbers down and the entire
-    picture is determined &mdash; including the part Escher left blank.
+    In 2003, two mathematicians in Leiden (<strong>Bart de&nbsp;Smit</strong> and
+    <strong>Hendrik Lenstra</strong>) worked out the exact map hiding in Escher's
+    grid. The idealised <em>Print Gallery</em>, they showed, contains a complete
+    copy of itself rotated by <strong>157.6256&deg;</strong> and shrunk by a factor
+    of <strong>22.5837</strong>. Pin those two numbers down and the rest of the
+    picture is forced, including the part Escher left blank.
   </p>
   <p>
-    With the map in hand, they let a computer do what a pen could not: continue the
-    spiral inward, far past the reach of any hand, and close the white hole at last.
+    This is not a theorem so much as a recipe: with the map in hand, you can hand
+    the missing centre to a computer and have it do what a pen could not. That is
+    exactly what they did, continuing the spiral inward far past the reach of any
+    hand and closing the white hole at last.
   </p>
 
   <h2>See it move</h2>
   <p>
     If you'd like the whole argument in motion, <strong>Grant Sanderson</strong>
     (of <em>3Blue1Brown</em>) made a beautiful animated tour of the paper in 2026.
-    It is the clearest walk through the mathematics there is &mdash;
+    It is the clearest walk through the mathematics there is:
     <a href="https://www.youtube.com/watch?v=ldxFjLJ3rVY" target="_blank" rel="noopener noreferrer">watch it here</a>.
   </p>
 
@@ -609,7 +610,7 @@
     This tool does the bending for you. Drop in any photo, draw the rectangle where
     the next copy should sit, and flip between the two infinities: the straight
     Droste fall, or the tententoon spiral. Export the loop as a PNG, a GIF, or a
-    video. It all runs in your browser &mdash; no upload, no account, no server.
+    video. It all runs in your browser: no upload, no account, no server.
   </p>
   <div class="cta-row">
     <a class="cta" href="/">Open the tool&nbsp;&rarr;</a>
@@ -619,8 +620,8 @@
     <p>
       <em>Prentententoonstelling</em> (&ldquo;<em>Print Gallery</em>&rdquo;),
       M.&nbsp;C.&nbsp;Escher, lithograph, 1956. Escher's works are
-      &copy;&nbsp;The&nbsp;M.&nbsp;C.&nbsp;Escher&nbsp;Company &mdash; shown here by
-      description and link, not reproduction.
+      &copy;&nbsp;The&nbsp;M.&nbsp;C.&nbsp;Escher&nbsp;Company (shown here by
+      description and link, not reproduction).
     </p>
     <p>
       &ldquo;The Mathematical Structure of Escher's Print Gallery,&rdquo;

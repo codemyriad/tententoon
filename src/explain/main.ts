@@ -82,7 +82,7 @@ async function main(): Promise<void> {
   const crop = fitCropToNest({ width: W, height: H }, nest, null);
   const geom = buildPanelGeometry(nest, crop);
   if (!geom) {
-    showFallback('That nest is degenerate — pick a smaller rectangle.');
+    showFallback('That nest is degenerate. Pick a smaller rectangle.');
     return;
   }
   const { ctx, R0, S } = geom;
@@ -165,7 +165,7 @@ async function main(): Promise<void> {
   function updateReadout(): void {
     if (!readout) return;
     if (state.panU === 0 && state.panV === 0) {
-      readout.textContent = 'drag the log panel — ↔ zoom, ↕ rotate the original';
+      readout.textContent = 'drag the log panel: ↔ zoom, ↕ rotate the original';
       return;
     }
     const zoom = Math.exp(state.panU);
@@ -213,7 +213,7 @@ async function main(): Promise<void> {
     state.angle = (deg * Math.PI) / 180;
     if (angleVal) {
       const closed = Math.abs(deg - betaDeg) < 0.4;
-      angleVal.textContent = `${deg.toFixed(1)}°${closed ? ' — closed ✓' : ''}`;
+      angleVal.textContent = `${deg.toFixed(1)}°${closed ? ' · closed ✓' : ''}`;
       angleVal.classList.toggle('closed', closed);
     }
     scheduleRender(['tententoon', 'rotlog']);
@@ -227,7 +227,7 @@ async function main(): Promise<void> {
     setAngleDeg(betaDeg);
   }
   const betaNote = byId<HTMLElement>('exp-angle-note');
-  if (betaNote) betaNote.textContent = `closes seamlessly at β ≈ ${betaDeg.toFixed(1)}°`;
+  if (betaNote) betaNote.textContent = `closes on itself at β ≈ ${betaDeg.toFixed(1)}°`;
 
   // ── Drag-to-pan on the log panel ─────────────────────────────────────────
   const logCanvas = byId<HTMLCanvasElement>('exp-log');
