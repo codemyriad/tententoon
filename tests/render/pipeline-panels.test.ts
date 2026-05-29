@@ -165,6 +165,35 @@ describe('pipeline-panels', () => {
     dump('4-log-largenest.jpg', logImg);
   });
 
+  it('escher twist k=0 removes the spiral (identity angle map)', () => {
+    // With k = 0 the Lenstra map has no twist: arg is unchanged and the
+    // radius is just |z−c|, so it reduces to a plain Droste fold. The result
+    // must differ from the canonical twisted spiral.
+    const W = 300;
+    const H = Math.round(W * (crop.h / crop.w));
+    const sc = W / crop.w;
+    const twisted = renderEscherStill(pixels, geom!.ctx, geom!.R0, sc, W, H);
+    const flat = renderEscherStill(pixels, geom!.ctx, geom!.R0, sc, W, H, { kTwist: 0 });
+    let diff = 0;
+    for (let i = 0; i < flat.data.length; i += 4) {
+      diff += Math.abs(flat.data[i] - twisted.data[i]);
+    }
+    expect(diff).toBeGreaterThan(0);
+    expect(opaqueFraction(flat)).toBeGreaterThan(0.5);
+  });
+
+  it('a log-space pan changes the panels (and is bounded/opaque)', () => {
+    const W = 256;
+    const H = 256;
+    const ppu = panelPxPerUnit('log', geom!.ctx.logS, H);
+    const base = renderLogPanel(pixels, geom!.ctx, ppu, uRef, W, H);
+    const panned = renderLogPanel(pixels, geom!.ctx, ppu, uRef, W, H, { panV: 1.0 });
+    let diff = 0;
+    for (let i = 0; i < base.data.length; i += 4) diff += Math.abs(base.data[i] - panned.data[i]);
+    expect(diff).toBeGreaterThan(0); // a v-pan (rotation) visibly shifts content
+    expect(opaqueFraction(panned)).toBeGreaterThan(0.999); // still fills, no black
+  });
+
   it('produces tiny but valid output for sub-2px panels (no crash)', () => {
     const ppu = panelPxPerUnit('log', geom!.ctx.logS, 1);
     const img = renderLogPanel(pixels, geom!.ctx, ppu, uRef, 1, 1);

@@ -101,6 +101,20 @@ function asImageData(img: PanelImage): ImageData {
   return img as unknown as ImageData;
 }
 
+/**
+ * Optional transform overrides shared by the panels (the "geometry lab").
+ * Omitted → canonical behaviour, so existing callers and tests are unchanged.
+ *   panU/panV — pan in log space (δu, δv): δu zooms, δv rotates.
+ *   rot       — rotated-log rotation angle (canonical atan(logS/2π)).
+ *   kTwist    — tententoon twist k (canonical logS/2π = tan rot).
+ */
+export type PanelOpts = {
+  panU?: number;
+  panV?: number;
+  rot?: number;
+  kTwist?: number;
+};
+
 export type PanelGeometry = {
   /** Droste sampling context (limit point, logS, rMax, crop offset, …). */
   ctx: DrosteCtx;
@@ -157,15 +171,18 @@ export function renderLogPanel(
   pxPerUnit: number,
   uRef: number,
   W: number,
-  H: number
+  H: number,
+  opts: PanelOpts = {}
 ): PanelImage {
   const out = blankImage(W, H);
   const w = out.width;
   const h = out.height;
   const inv = 1 / pxPerUnit;
+  const panU = opts.panU ?? 0;
+  const panV = opts.panV ?? 0;
   renderMappedDroste(asImageData(out), pixels, ctx, (px, py, s) => {
-    const u = wrapToTopRing((px - w / 2) * inv + uRef, uRef, ctx.logS);
-    const v = (py - h / 2) * inv;
+    const u = wrapToTopRing((px - w / 2) * inv + uRef + panU, uRef, ctx.logS);
+    const v = (py - h / 2) * inv + panV;
     const r = Math.exp(u);
     s.x = ctx.cx + r * Math.cos(v);
     s.y = ctx.cy + r * Math.sin(v);
@@ -189,20 +206,23 @@ export function renderRotatedLogPanel(
   pxPerUnit: number,
   uRef: number,
   W: number,
-  H: number
+  H: number,
+  opts: PanelOpts = {}
 ): PanelImage {
   const out = blankImage(W, H);
   const w = out.width;
   const h = out.height;
   const inv = 1 / pxPerUnit;
-  const L = Math.hypot(ctx.logS, TWO_PI);
-  const cosB = TWO_PI / L; // cos(atan(logS / 2π))
-  const sinB = ctx.logS / L; // sin(atan(logS / 2π))
+  const rot = opts.rot ?? Math.atan2(ctx.logS, TWO_PI);
+  const cosB = Math.cos(rot);
+  const sinB = Math.sin(rot);
+  const panU = opts.panU ?? 0;
+  const panV = opts.panV ?? 0;
   renderMappedDroste(asImageData(out), pixels, ctx, (px, py, s) => {
     const cu = (px - w / 2) * inv;
     const cv = (py - h / 2) * inv;
-    const u = wrapToTopRing(cu * cosB + cv * sinB + uRef, uRef, ctx.logS);
-    const v = -cu * sinB + cv * cosB;
+    const u = wrapToTopRing(cu * cosB + cv * sinB + uRef + panU, uRef, ctx.logS);
+    const v = -cu * sinB + cv * cosB + panV;
     const r = Math.exp(u);
     s.x = ctx.cx + r * Math.cos(v);
     s.y = ctx.cy + r * Math.sin(v);
@@ -228,20 +248,24 @@ export function renderEscherStill(
   R0: number,
   scale: number,
   W: number,
-  H: number
+  H: number,
+  opts: PanelOpts = {}
 ): PanelImage {
   const out = blankImage(W, H);
   const w = out.width;
   const h = out.height;
   const data = out.data;
   const { cx, cy, logS, rMax } = ctx;
-  const k = logS / TWO_PI;
+  const k = opts.kTwist ?? logS / TWO_PI;
+  const panU = opts.panU ?? 0;
+  const panV = opts.panV ?? 0;
   const lnR0 = Math.log(Math.max(R0, 1e-9));
   const lnRmax = Math.log(rMax);
   const alphaMag = Math.sqrt(1 + k * k);
   const rgba: [number, number, number, number] = [0, 0, 0, 0];
 
-  // Inverse Lenstra map for one (sub)sample at canvas offset (ox, oy).
+  // Inverse Lenstra map for one (sub)sample at canvas offset (ox, oy). The
+  // log-space pan shifts the twisted radius (panU = zoom) and angle (panV).
   const sampleAt = (px: number, py: number, ox: number, oy: number): boolean => {
     const x = (px + ox) / scale;
     const y = (py + oy) / scale;
@@ -251,8 +275,8 @@ export function renderEscherStill(
     if (R2 < 1e-12) return false;
     const lnR = 0.5 * Math.log(R2);
     const Phi = Math.atan2(dy, dx);
-    const newPhi = Phi - k * (lnR - lnR0);
-    const r = Math.exp(lnR + k * Phi); // t = 0
+    const newPhi = Phi - k * (lnR - lnR0) + panV;
+    const r = Math.exp(lnR + k * Phi + panU); // t = 0
     const sx = cx + r * Math.cos(newPhi);
     const sy = cy + r * Math.sin(newPhi);
     return sampleDroste(pixels, ctx, sx, sy, rgba);
@@ -268,9 +292,9 @@ export function renderEscherStill(
       // Footprint = source-pixels per output-pixel; picks the SS tier.
       const lnR = 0.5 * Math.log(R2);
       const Phi = Math.atan2(dy, dx);
-      const baseLnR = lnR + k * Phi;
+      const baseLnR = lnR + k * Phi + panU;
       const n = Math.max(0, Math.floor((lnRmax - baseLnR) / logS));
-      const footprint = (alphaMag * Math.exp(k * Phi + n * logS)) / scale;
+      const footprint = (alphaMag * Math.exp(k * Phi + panU + n * logS)) / scale;
       const offsets = ssOffsetsForFootprint(footprint);
       if (!offsets) {
         if (sampleAt(px, py, 0, 0)) {

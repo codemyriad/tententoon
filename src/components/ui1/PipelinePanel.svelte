@@ -230,10 +230,16 @@
         });
         return;
       }
+      const opts = {
+        panU: experiment.panU,
+        panV: experiment.panV,
+        rot: gammaRad,
+        kTwist: Math.tan(gammaRad)
+      };
       let out: PanelImage;
-      if (kind === 'log') out = renderLogPanel(pixels, g.ctx, ppu, uRef, cw, ch);
-      else if (kind === 'rotlog') out = renderRotatedLogPanel(pixels, g.ctx, ppu, uRef, cw, ch);
-      else out = renderEscherStill(pixels, g.ctx, g.R0, scale, cw, ch);
+      if (kind === 'log') out = renderLogPanel(pixels, g.ctx, ppu, uRef, cw, ch, opts);
+      else if (kind === 'rotlog') out = renderRotatedLogPanel(pixels, g.ctx, ppu, uRef, cw, ch, opts);
+      else out = renderEscherStill(pixels, g.ctx, g.R0, scale, cw, ch, opts);
       paintCpu(out);
     });
     return () => cancelAnimationFrame(raf);
