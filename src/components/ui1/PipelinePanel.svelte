@@ -214,6 +214,14 @@
       ch = Math.max(1, Math.round(ch * s));
     }
     const pixels = pixelsFor(doc.image);
+    // Read every reactive input SYNCHRONOUSLY here so the effect re-runs when
+    // it changes. Values read only inside the rAF callback below are NOT
+    // tracked by Svelte — that's why angle/pan changes used to repaint the
+    // axes (a $derived) but never the canvas.
+    const rot = gammaRad;
+    const kTwist = Math.tan(gammaRad);
+    const panU = experiment.panU;
+    const panV = experiment.panV;
 
     const raf = requestAnimationFrame(() => {
       const ppu = kind === 'escher' ? 0 : panelPxPerUnit(kind, g.ctx.logS, ch);
@@ -225,17 +233,11 @@
         glRenderer.render({
           pixels, ctx: g.ctx, mode: kind, W: cw, H: ch,
           pxPerUnit: ppu, uRef, scale, lnR0,
-          rot: gammaRad, kTwist: Math.tan(gammaRad),
-          panU: experiment.panU, panV: experiment.panV
+          rot, kTwist, panU, panV
         });
         return;
       }
-      const opts = {
-        panU: experiment.panU,
-        panV: experiment.panV,
-        rot: gammaRad,
-        kTwist: Math.tan(gammaRad)
-      };
+      const opts = { panU, panV, rot, kTwist };
       let out: PanelImage;
       if (kind === 'log') out = renderLogPanel(pixels, g.ctx, ppu, uRef, cw, ch, opts);
       else if (kind === 'rotlog') out = renderRotatedLogPanel(pixels, g.ctx, ppu, uRef, cw, ch, opts);
