@@ -12,6 +12,7 @@
  */
 
 import { fitCropToNest, ensureNestInside, type Rect as DrosteRect } from '../math/droste';
+import { resetExperiment } from './pipeline-experiments.svelte';
 
 export type Tool = 'select' | 'rect' | 'pan';
 export type Direction = 'in' | 'out';
@@ -100,6 +101,9 @@ export function setImage(image: ImageBitmap | null, name = ''): void {
   doc.crop = null;
   playback.playing = false;
   playback.t = 0;
+  // A new image has fresh geometry; clear any stashed geometry-lab pan/angle
+  // so the pipeline view doesn't open with a surprising transform.
+  resetExperiment();
 }
 
 // --- Rect/crop commit helpers ------------------------------------------

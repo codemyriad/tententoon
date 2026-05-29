@@ -37,6 +37,14 @@ export type PipelineGLInput = {
   /** escher: canvas px per working px, and log of the orientation radius. */
   scale?: number;
   lnR0?: number;
+  /** Experiment overrides (default to canonical when omitted):
+   *  rot   — rotated-log rotation angle (canonical atan(logS/2π)).
+   *  kTwist— tententoon twist k (canonical logS/2π).
+   *  panU/panV — log-space pan applied to every panel. */
+  rot?: number;
+  kTwist?: number;
+  panU?: number;
+  panV?: number;
 };
 
 export class PipelinePanelGLRenderer {
@@ -100,7 +108,10 @@ export class PipelinePanelGLRenderer {
       u_pxPerUnit: input.pxPerUnit ?? 1,
       u_uRef: input.uRef ?? 0,
       u_scale: input.scale ?? 1,
-      u_lnR0: input.lnR0 ?? 0
+      u_lnR0: input.lnR0 ?? 0,
+      u_rot: input.rot ?? Math.atan2(droste.logS, 2 * Math.PI),
+      u_kTwist: input.kTwist ?? droste.logS / (2 * Math.PI),
+      u_pan: [input.panU ?? 0, input.panV ?? 0]
     });
     twgl.drawBufferInfo(gl, quad, gl.TRIANGLE_STRIP);
   }
