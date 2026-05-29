@@ -32,6 +32,8 @@
     panelPxPerUnit,
     panelURef,
     MIN_LOGS,
+    LOG_V_PERIODS,
+    ROT_V_PERIODS,
     type PanelImage
   } from '../../lib/ui1/pipeline-panels';
 
@@ -94,6 +96,49 @@
       return [`β = ${beta.toFixed(1)}°`, `L = ${L.toFixed(2)}`];
     }
     return [`S = ${geom.S.toFixed(2)}`];
+  });
+
+  // Coordinate-axis overlay for the two log panels (escher is the spiral —
+  // no cartesian axes). All in CSS px of the (cell-filling) canvas, so it's
+  // dpr-independent and stays aligned with the rendered lattice. The origin
+  // (uRef, v=0) sits at the panel centre; u increases right, v increases
+  // down — matching the render's pixel→(u,v) mapping.
+  const TWO_PI = 2 * Math.PI;
+  const axes = $derived.by(() => {
+    if (kind === 'escher' || !geom || !fit || degenerate) return null;
+    const W = fit.w;
+    const H = fit.h;
+    const cx = W / 2;
+    const cy = H / 2;
+    const logS = geom.ctx.logS;
+    if (kind === 'log') {
+      // One vertical lattice line per Droste period (constant-radius rings).
+      const cssPerUnit = H / (LOG_V_PERIODS * TWO_PI);
+      const stepX = logS * cssPerUnit;
+      const gridX: number[] = [];
+      if (stepX >= 10) {
+        for (let x = cx; x <= W + 0.5; x += stepX) gridX.push(x);
+        for (let x = cx - stepX; x >= -0.5; x -= stepX) gridX.push(x);
+      }
+      return {
+        kind, W, H, cx, cy, stepX, gridX,
+        xLabel: 'u = log |z − c|', yLabel: 'v = arg(z − c)'
+      };
+    }
+    // rotated log: show the panel's own u′/v′ axes, plus the original log
+    // u-axis (v = 0) which lands at v′ = u′·tan β — a line tilted by β. That
+    // tilt is the whole point of the panel, so we draw it dashed.
+    const beta = Math.atan2(logS, TWO_PI);
+    const len = Math.min(W, H) * 0.42;
+    const c = Math.cos(beta);
+    const s = Math.sin(beta);
+    return {
+      kind, W, H, cx, cy,
+      xLabel: 'u′', yLabel: 'v′',
+      origX1: cx - c * len, origY1: cy - s * len,
+      origX2: cx + c * len, origY2: cy + s * len,
+      origLabelX: cx + c * len * 0.82, origLabelY: cy + s * len * 0.82 + 13
+    };
   });
 
   $effect(() => {
@@ -194,6 +239,43 @@
         style:width="{fit.w}px"
         style:height="{fit.h}px"
       ></canvas>
+      {#if axes}
+        <svg
+          class="axes"
+          viewBox="0 0 {axes.W} {axes.H}"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <defs>
+            <marker id="pp-arrow-{kind}" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" class="arrowhead" />
+            </marker>
+          </defs>
+          {#if axes.kind === 'log'}
+            {#each axes.gridX as gx}
+              <line x1={gx} y1="0" x2={gx} y2={axes.H} class="grid" />
+            {/each}
+          {:else}
+            <line
+              x1={axes.origX1} y1={axes.origY1} x2={axes.origX2} y2={axes.origY2}
+              class="orig"
+            />
+            <text x={axes.origLabelX} y={axes.origLabelY} class="axtext small orig-label">u-axis (β)</text>
+          {/if}
+          <!-- X axis: u increases right -->
+          <line x1="0" y1={axes.cy} x2={axes.W} y2={axes.cy} class="axis" marker-end="url(#pp-arrow-{kind})" />
+          <!-- Y axis: v increases down -->
+          <line x1={axes.cx} y1="0" x2={axes.cx} y2={axes.H} class="axis" marker-end="url(#pp-arrow-{kind})" />
+          <text x={axes.W - 9} y={axes.cy - 7} text-anchor="end" class="axtext">{axes.xLabel}</text>
+          <text x={axes.cx + 8} y={axes.H - 9} class="axtext">{axes.yLabel}</text>
+          {#if axes.kind === 'log'}
+            <line x1={axes.cx} y1={axes.cy + 10} x2={axes.cx + axes.stepX} y2={axes.cy + 10} class="period" />
+            <line x1={axes.cx} y1={axes.cy + 6} x2={axes.cx} y2={axes.cy + 14} class="period" />
+            <line x1={axes.cx + axes.stepX} y1={axes.cy + 6} x2={axes.cx + axes.stepX} y2={axes.cy + 14} class="period" />
+            <text x={axes.cx + axes.stepX / 2} y={axes.cy + 24} text-anchor="middle" class="axtext small">logS</text>
+          {/if}
+        </svg>
+      {/if}
       <div class="label mono">
         <span class="title">{TITLES[kind]}</span>
         {#each chips as chip}<span class="chip">{chip}</span>{/each}
@@ -231,6 +313,36 @@
     display: block;
     image-rendering: auto;
   }
+  .axes {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: visible;
+    /* Dark halo so the amber axes read over any image region. */
+    filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.95));
+  }
+  .axes .axis { stroke: rgba(255, 209, 138, 0.98); stroke-width: 2; }
+  .axes .grid { stroke: rgba(255, 209, 138, 0.32); stroke-width: 1; }
+  .axes .period { stroke: rgba(255, 209, 138, 0.98); stroke-width: 1.6; }
+  .axes .orig {
+    stroke: rgba(150, 205, 255, 0.85);
+    stroke-width: 1.4;
+    stroke-dasharray: 5 4;
+  }
+  .axes .arrowhead { fill: rgba(255, 217, 160, 0.95); }
+  .axes .axtext {
+    fill: #fff;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    paint-order: stroke;
+    stroke: rgba(0, 0, 0, 0.7);
+    stroke-width: 3px;
+    stroke-linejoin: round;
+  }
+  .axes .axtext.small { font-size: 10px; }
+  .axes .orig-label { fill: rgba(190, 224, 255, 0.95); }
   .label {
     position: absolute;
     left: 8px;
