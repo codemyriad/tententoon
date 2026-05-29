@@ -303,6 +303,28 @@
   .exp-controls button:hover { border-color: var(--accent); color: var(--accent); }
   .exp-fallback { font-family: Inter, system-ui, sans-serif; font-size: 13.5px; color: var(--muted); }
 
+  .angle-ctl { display: inline-flex; align-items: center; gap: 9px; }
+  .angle-ctl em { font-style: italic; }
+  .angle-ctl input[type="range"] { width: 150px; accent-color: var(--accent); cursor: pointer; }
+  .angle-ctl .aval { font-variant-numeric: tabular-nums; min-width: 96px; }
+  .angle-ctl .aval.closed { color: var(--accent-deep); font-weight: 700; }
+
+  .seg { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .seg .seg-label { color: var(--muted); }
+  .seg button {
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-2);
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 7px;
+    padding: 5px 11px;
+    cursor: pointer;
+  }
+  .seg button:hover { border-color: var(--accent); color: var(--accent); }
+  .seg button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+
   .cta-row { margin: 2em 0 1em; }
   .cta {
     display: inline-block;
@@ -442,8 +464,12 @@
       <span class="plabel">tententoon</span>
       <canvas id="exp-escher"></canvas>
     </div>
-    <figcaption>The same photograph, wound into a spiral &mdash; rendered live, right here. That is a <strong>tententoon</strong>.</figcaption>
+    <figcaption>A live <strong>tententoon</strong> &mdash; the source, wound into a spiral.</figcaption>
   </figure>
+  <div class="exp-controls">
+    <label class="angle-ctl">twist&nbsp;<em>&beta;</em> <input type="range" id="exp-angle" aria-label="twist angle" /> <span class="aval" id="exp-angle-val"></span></label>
+    <span class="readout" id="exp-angle-note"></span>
+  </div>
 
   <p>
     Same picture. Same rule &mdash; a copy, inside a copy, inside a copy. But now
@@ -476,8 +502,19 @@
     sideways drag <em>zooms</em> the original on the right; an up-and-down drag
     <em>rotates</em> it. A slide in the log is nothing but a rotate-and-zoom back
     in the original picture &mdash; that is the whole trick, and the readout keeps
-    the score.
+    the score. Feed the same machine something cleaner, too: a grid, or polar
+    circles &mdash; each ring styled so you can follow it through the bend.
   </p>
+
+  <div class="exp-controls">
+    <span class="seg" role="group" aria-label="source content">
+      <span class="seg-label">show</span>
+      <button type="button" data-source="picture" class="on">picture</button>
+      <button type="button" data-source="grid">grid</button>
+      <button type="button" data-source="polar">polar</button>
+      <button type="button" data-source="overlay">overlay</button>
+    </span>
+  </div>
 
   <figure class="experiment live-panels" aria-label="Drag the log panel to zoom and rotate the original picture">
     <div class="exp-pair">
