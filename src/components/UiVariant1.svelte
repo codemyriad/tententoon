@@ -20,6 +20,7 @@
   import PreviewStage from './ui1/PreviewStage.svelte';
   import DrosteStage from './ui1/DrosteStage.svelte';
   import PipelinePanel from './ui1/PipelinePanel.svelte';
+  import PipelineControls from './ui1/PipelineControls.svelte';
   import Timeline from './ui1/Timeline.svelte';
   import DropZone from './ui1/DropZone.svelte';
   import {
@@ -142,7 +143,9 @@
           <PipelinePanel kind="rotlog" />
           <PipelinePanel kind="escher" />
         </div>
-        {#if ui.view !== 'pipeline'}
+        {#if ui.view === 'pipeline'}
+          <PipelineControls />
+        {:else}
           <Timeline />
         {/if}
       </div>

@@ -36,6 +36,7 @@
     ROT_V_PERIODS,
     type PanelImage
   } from '../../lib/ui1/pipeline-panels';
+  import { experiment } from '../../lib/ui1/pipeline-experiments.svelte';
 
   type Kind = 'log' | 'rotlog' | 'escher';
   let { kind }: { kind: Kind } = $props();
@@ -73,6 +74,13 @@
   // fold would divide by ~0. Surface a hint instead of rendering black.
   const degenerate = $derived(!!geom && geom.ctx.logS < MIN_LOGS);
 
+  // Active rotation/twist angle: the experiment override, else canonical β.
+  const gammaRad = $derived.by(() => {
+    if (!geom) return 0;
+    if (experiment.angleDeg !== null) return (experiment.angleDeg * Math.PI) / 180;
+    return Math.atan2(geom.ctx.logS, 2 * Math.PI);
+  });
+
   // Letterboxed CSS footprint. Escher preserves the crop aspect; the log
   // panels fill the whole cell (the lattice tiles infinitely).
   const fit = $derived.by(() => {
@@ -91,9 +99,10 @@
     const logS = geom.ctx.logS;
     if (kind === 'log') return [`logS = ${logS.toFixed(3)}`, 'period_v = 2π'];
     if (kind === 'rotlog') {
-      const beta = (Math.atan2(logS, 2 * Math.PI) * 180) / Math.PI;
+      const deg = (gammaRad * 180) / Math.PI;
+      const tag = experiment.angleDeg !== null ? ' (set)' : '';
       const L = Math.hypot(logS, 2 * Math.PI);
-      return [`β = ${beta.toFixed(1)}°`, `L = ${L.toFixed(2)}`];
+      return [`β = ${deg.toFixed(1)}°${tag}`, `L = ${L.toFixed(2)}`];
     }
     return [`S = ${geom.S.toFixed(2)}`];
   });
@@ -126,9 +135,9 @@
       };
     }
     // rotated log: show the panel's own u′/v′ axes, plus the original log
-    // u-axis (v = 0) which lands at v′ = u′·tan β — a line tilted by β. That
-    // tilt is the whole point of the panel, so we draw it dashed.
-    const beta = Math.atan2(logS, TWO_PI);
+    // u-axis (v = 0) which lands at v′ = u′·tan γ — a line tilted by the
+    // active rotation γ. That tilt is the whole point of the panel.
+    const beta = gammaRad;
     const len = Math.min(W, H) * 0.42;
     const c = Math.cos(beta);
     const s = Math.sin(beta);
@@ -215,7 +224,9 @@
       if (useGL && glRenderer) {
         glRenderer.render({
           pixels, ctx: g.ctx, mode: kind, W: cw, H: ch,
-          pxPerUnit: ppu, uRef, scale, lnR0
+          pxPerUnit: ppu, uRef, scale, lnR0,
+          rot: gammaRad, kTwist: Math.tan(gammaRad),
+          panU: experiment.panU, panV: experiment.panV
         });
         return;
       }
@@ -227,10 +238,46 @@
     });
     return () => cancelAnimationFrame(raf);
   });
+
+  // --- Experiment: drag the rotated-log panel to pan (idea 2). The drag
+  // delta in the rotated (u′, v′) frame becomes a log-space pan δ = R(−γ)·d,
+  // written to the shared experiment state — so the same shift scrolls the
+  // log panels AND zooms (u) / rotates (v) the tententoon.
+  let dragStart: { x: number; y: number; panU: number; panV: number } | null = null;
+  const canPan = $derived(kind === 'rotlog' && !!geom && !degenerate);
+
+  function onPanDown(e: PointerEvent) {
+    if (!canPan) return;
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    dragStart = { x: e.clientX, y: e.clientY, panU: experiment.panU, panV: experiment.panV };
+  }
+  function onPanMove(e: PointerEvent) {
+    if (!dragStart || !geom || !fit) return;
+    const L = Math.hypot(geom.ctx.logS, 2 * Math.PI);
+    const cssPerUnit = fit.h / (ROT_V_PERIODS * L);
+    // Screen delta → rotated-frame units. Negate so content follows the cursor.
+    const du = -(e.clientX - dragStart.x) / cssPerUnit;
+    const dv = -(e.clientY - dragStart.y) / cssPerUnit;
+    const c = Math.cos(gammaRad);
+    const s = Math.sin(gammaRad);
+    experiment.panU = dragStart.panU + (du * c + dv * s);
+    experiment.panV = dragStart.panV + (-du * s + dv * c);
+  }
+  function onPanUp() {
+    dragStart = null;
+  }
 </script>
 
-<section class="ppanel">
-  <div class="viewport" bind:this={viewport}>
+<section class="ppanel" class:pannable={canPan}>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="viewport"
+    bind:this={viewport}
+    onpointerdown={canPan ? onPanDown : undefined}
+    onpointermove={canPan ? onPanMove : undefined}
+    onpointerup={canPan ? onPanUp : undefined}
+    onpointercancel={canPan ? onPanUp : undefined}
+  >
     {#if doc.image && geom && fit && !degenerate}
       <canvas
         bind:this={canvas}
@@ -308,6 +355,8 @@
     overflow: hidden;
     background: #000;
   }
+  .pannable .viewport { cursor: grab; touch-action: none; }
+  .pannable .viewport:active { cursor: grabbing; }
   canvas {
     position: absolute;
     display: block;
