@@ -1,14 +1,17 @@
 /**
- * Explorable for the "four pictures" section of explain.html.
+ * Live panels for explain.html, rendered by the app's own GPU pipeline
+ * renderer (PipelinePanelGLRenderer) — no duplicated math.
  *
- * Loads a (swappable) test image, builds the Droste→Escher geometry, and
- * renders the pipeline's four frames live: source · log(z−c) · rotated log ·
- * tententoon. It reuses the app's GPU renderer (PipelinePanelGLRenderer) and
- * geometry helpers — no duplicated math.
+ * Three places on the page, fed by one swappable test image:
+ *   #exp-escher  — the tententoon spiral (canonical twist), in "Now bend it".
+ *   #exp-rotlog  — the rotated-log lattice, the "lean it over" illustration.
+ *   #exp-log     — log(z − c). DRAGGABLE.  +  #exp-orig — "the original".
  *
- * Drag the log panel: a horizontal drag pans u = log|z−c| (a ZOOM); a vertical
- * drag pans v = arg(z−c) (a ROTATION). The same pan feeds the tententoon, so
- * you watch the spiral zoom and rotate under your finger.
+ * The experiment: dragging #exp-log pans log space. A horizontal pan is a
+ * shift in u = log|z − c| (a ZOOM); a vertical pan is a shift in v = arg(z − c)
+ * (a ROTATION). The same pan feeds #exp-orig — the picture with the spiral
+ * twist turned off (kTwist = 0) — so you watch a slide in the log become a
+ * rotate-and-zoom of the original, first-hand.
  */
 
 import { fitCropToNest, type Rect } from '../lib/math/droste';
@@ -49,11 +52,12 @@ async function loadPixels(src: string): Promise<ImageData> {
   return ctx.getImageData(0, 0, c.width, c.height);
 }
 
-type Panel = { canvas: HTMLCanvasElement; renderer: PipelinePanelGLRenderer; mode: PanelMode };
+type PanelDef = { id: string; mode: PanelMode; pan: boolean; kTwist?: number };
+type Panel = PanelDef & { canvas: HTMLCanvasElement; renderer: PipelinePanelGLRenderer };
 
 async function main(): Promise<void> {
-  const fig = byId<HTMLElement>('explorable');
-  if (!fig) return;
+  const root = byId<HTMLElement>('exp-root');
+  if (!root) return;
   const fallback = byId<HTMLElement>('exp-fallback');
   const readout = byId<HTMLElement>('exp-readout');
 
@@ -62,10 +66,10 @@ async function main(): Promise<void> {
       fallback.hidden = false;
       if (msg) fallback.textContent = msg;
     }
-    const grid = fig!.querySelector('.exp-grid') as HTMLElement | null;
-    const controls = fig!.querySelector('.exp-controls') as HTMLElement | null;
-    if (grid) grid.style.display = 'none';
-    if (controls) controls.style.display = 'none';
+    // Hide every live panel + its controls; the prose still explains it all.
+    document.querySelectorAll<HTMLElement>('.live-panels, .exp-controls').forEach((el) => {
+      el.style.display = 'none';
+    });
   }
 
   let pixels: ImageData;
@@ -88,26 +92,14 @@ async function main(): Promise<void> {
   const uRef = panelURef(ctx.rMax);
   const lnR0 = Math.log(Math.max(R0, 1e-9));
 
-  // Source thumbnail + nest overlay. Every cell takes the image's aspect ratio
-  // (--cell-ar), so the source fills its cell with no letterbox and the nest
-  // box can be positioned in plain percentages.
-  fig.style.setProperty('--cell-ar', `${image.width} / ${image.height}`);
-  const srcImg = byId<HTMLImageElement>('exp-src');
-  if (srcImg) srcImg.src = SOURCE;
-  const nestBox = byId<HTMLElement>('exp-nest');
-  if (nestBox) {
-    nestBox.style.left = `${(nest.x / image.width) * 100}%`;
-    nestBox.style.top = `${(nest.y / image.height) * 100}%`;
-    nestBox.style.width = `${(nest.w / image.width) * 100}%`;
-    nestBox.style.height = `${(nest.h / image.height) * 100}%`;
-  }
+  // Image-aspect cells so the "original" panel shows the picture undistorted.
+  root.style.setProperty('--cell-ar', `${image.width} / ${image.height}`);
 
-  // GL panels — one WebGL2 context per canvas. Bail to the prose fallback if
-  // WebGL2 is unavailable (init throws).
-  const defs: Array<{ id: string; mode: PanelMode }> = [
-    { id: 'exp-log', mode: 'log' },
-    { id: 'exp-rotlog', mode: 'rotlog' },
-    { id: 'exp-escher', mode: 'escher' }
+  const defs: PanelDef[] = [
+    { id: 'exp-escher', mode: 'escher', pan: false }, // the spiral ("Now bend it")
+    { id: 'exp-rotlog', mode: 'rotlog', pan: false }, // the tilt illustration
+    { id: 'exp-log', mode: 'log', pan: true }, //        draggable log lattice
+    { id: 'exp-orig', mode: 'escher', pan: true, kTwist: 0 } // "the original", no twist
   ];
   const panels: Panel[] = [];
   try {
@@ -116,7 +108,7 @@ async function main(): Promise<void> {
       if (!canvas) continue;
       const renderer = new PipelinePanelGLRenderer();
       renderer.init(canvas);
-      panels.push({ canvas, renderer, mode: d.mode });
+      panels.push({ ...d, canvas, renderer });
     }
   } catch {
     for (const p of panels) p.renderer.dispose();
@@ -138,15 +130,18 @@ async function main(): Promise<void> {
       W = Math.max(1, Math.round(W * s));
       H = Math.max(1, Math.round(H * s));
     }
+    const panU = p.pan ? pan.u : 0;
+    const panV = p.pan ? pan.v : 0;
     if (p.mode === 'escher') {
       p.renderer.render({
         pixels, ctx, mode: 'escher', W, H,
-        scale: W / ctx.W, lnR0, panU: pan.u, panV: pan.v
+        scale: W / ctx.W, lnR0, panU, panV,
+        ...(p.kTwist !== undefined ? { kTwist: p.kTwist } : {})
       });
     } else {
       p.renderer.render({
         pixels, ctx, mode: p.mode, W, H,
-        pxPerUnit: panelPxPerUnit(p.mode, ctx.logS, H), uRef, panU: pan.u, panV: pan.v
+        pxPerUnit: panelPxPerUnit(p.mode, ctx.logS, H), uRef, panU, panV
       });
     }
   }
@@ -154,78 +149,77 @@ async function main(): Promise<void> {
   function updateReadout(): void {
     if (!readout) return;
     if (pan.u === 0 && pan.v === 0) {
-      readout.textContent = 'drag the log panel — ↔ zoom, ↕ rotate';
+      readout.textContent = 'drag the log panel — ↔ zoom, ↕ rotate the original';
       return;
     }
     const zoom = Math.exp(pan.u);
     let deg = ((pan.v * 180) / Math.PI) % 360;
     if (deg < 0) deg += 360;
-    readout.textContent = `u-pan → zoom ×${zoom.toFixed(2)}    ·    v-pan → rotation ${deg.toFixed(0)}°`;
+    readout.textContent = `the original is now zoomed ×${zoom.toFixed(2)} and rotated ${deg.toFixed(0)}°`;
   }
 
   let raf = 0;
-  function scheduleRender(): void {
+  let panOnly = false;
+  function scheduleRender(onlyPanned = false): void {
+    panOnly = panOnly || onlyPanned;
     if (raf) return;
     raf = requestAnimationFrame(() => {
       raf = 0;
-      for (const p of panels) renderPanel(p);
+      const only = panOnly;
+      panOnly = false;
+      for (const p of panels) if (!only || p.pan) renderPanel(p);
       updateReadout();
     });
   }
 
-  // Drag-to-pan: Δx → u (zoom), Δy → v (rotation). One cell-height of vertical
-  // drag = 2π = exactly one full turn, so the gesture maps 1:1 to the angle.
-  function attachPan(canvas: HTMLCanvasElement): void {
+  // Drag-to-pan on the log panel: Δx → u (zoom), Δy → v (rotation). One cell
+  // height of vertical drag = 2π = exactly one full turn.
+  const logCanvas = byId<HTMLCanvasElement>('exp-log');
+  if (logCanvas) {
     let active = false;
     let lastX = 0;
     let lastY = 0;
-    canvas.addEventListener('pointerdown', (e) => {
+    logCanvas.addEventListener('pointerdown', (e) => {
       active = true;
       lastX = e.clientX;
       lastY = e.clientY;
       try {
-        canvas.setPointerCapture(e.pointerId);
+        logCanvas.setPointerCapture(e.pointerId);
       } catch {
         /* pointer not capturable (e.g. synthetic event) */
       }
       e.preventDefault();
     });
-    canvas.addEventListener('pointermove', (e) => {
+    logCanvas.addEventListener('pointermove', (e) => {
       if (!active) return;
-      const h = canvas.getBoundingClientRect().height || 1;
+      const h = logCanvas.getBoundingClientRect().height || 1;
       const perUnit = h / TWO_PI; // css px per log-space unit
       pan.u += (e.clientX - lastX) / perUnit;
       pan.v += (e.clientY - lastY) / perUnit;
       lastX = e.clientX;
       lastY = e.clientY;
-      scheduleRender();
+      scheduleRender(true);
     });
     const end = (e: PointerEvent) => {
       active = false;
       try {
-        canvas.releasePointerCapture(e.pointerId);
+        logCanvas.releasePointerCapture(e.pointerId);
       } catch {
-        /* pointer already released */
+        /* already released */
       }
     };
-    canvas.addEventListener('pointerup', end);
-    canvas.addEventListener('pointercancel', end);
+    logCanvas.addEventListener('pointerup', end);
+    logCanvas.addEventListener('pointercancel', end);
   }
-  const logCanvas = byId<HTMLCanvasElement>('exp-log');
-  const rotCanvas = byId<HTMLCanvasElement>('exp-rotlog');
-  if (logCanvas) attachPan(logCanvas);
-  if (rotCanvas) attachPan(rotCanvas);
 
   byId<HTMLButtonElement>('exp-reset')?.addEventListener('click', () => {
     pan.u = 0;
     pan.v = 0;
-    scheduleRender();
+    scheduleRender(true);
   });
 
-  const ro = new ResizeObserver(() => scheduleRender());
-  ro.observe(fig);
-
-  scheduleRender();
+  new ResizeObserver(() => scheduleRender(false)).observe(root);
+  scheduleRender(false);
 }
 
 void main();

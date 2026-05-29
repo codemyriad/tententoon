@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>What is a tententoon?</title>
-<meta name="description" content="A self-repeating image whose copies spiral as they shrink, in the manner of Escher's Print Gallery — and why such a spiral can close on itself without a seam. With a live, draggable pipeline." />
+<meta name="description" content="A self-repeating image whose copies spiral as they shrink, in the manner of Escher's Print Gallery — and why such a spiral can close on itself without a seam. With a live, draggable log." />
 <meta property="og:title" content="What is a tententoon?" />
 <meta property="og:description" content="A self-repeating image whose copies spiral as they shrink, in the manner of Escher's Print Gallery." />
 <meta property="og:type" content="article" />
@@ -195,8 +195,8 @@
     color: var(--muted);
     text-align: center;
   }
+  figcaption em { font-style: italic; }
   .fig-droste { max-width: 560px; margin-left: auto; margin-right: auto; }
-  .fig-spiral { max-width: 380px; margin-left: auto; margin-right: auto; }
 
   .pull {
     font-size: 27px;
@@ -209,15 +209,22 @@
   }
   .pull b { color: var(--accent-deep); font-style: italic; }
 
-  .steps { margin: 1.5em 0; padding-left: 1.35em; }
-  .steps li { margin: 0.9em 0; line-height: 1.55; padding-left: 0.25em; }
-  .steps li::marker { color: var(--accent); font-weight: 700; }
-  .steps em { font-style: italic; }
-  .steps sup { font-size: 0.72em; }
+  /* ── Live panels (src/explain/main.ts) ───────────────────────────────── */
+  .panel-cell {
+    position: relative;
+    background: #000;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .panel-cell canvas { display: block; width: 100%; height: 100%; }
+  .ar-img { aspect-ratio: var(--cell-ar, 4 / 3); }
+  .ar-wide { aspect-ratio: 18 / 7; }
 
-  /* ── Live explorable (src/explain/main.ts) ───────────────────────────── */
-  .explorable { margin: 1.6em 0 0.4em; }
-  .exp-grid {
+  .solo-panel { margin: 2em auto; max-width: 520px; }
+  .solo-panel .panel-cell { box-shadow: 0 14px 38px rgba(20, 14, 10, 0.2); }
+
+  .experiment { margin: 1.6em 0 0; }
+  .exp-pair {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
@@ -226,24 +233,10 @@
     border-radius: 11px;
     box-shadow: 0 14px 38px rgba(20, 14, 10, 0.18);
   }
-  .exp-grid .cell {
-    position: relative;
-    aspect-ratio: var(--cell-ar, 4 / 3);
-    background: #000;
-    border-radius: 5px;
-    overflow: hidden;
-  }
-  .exp-grid canvas { display: block; width: 100%; height: 100%; }
-  .exp-grid .src-wrap { position: absolute; inset: 0; }
-  .exp-grid .src-wrap img { width: 100%; height: 100%; object-fit: fill; display: block; }
-  .exp-grid .nest {
-    position: absolute;
-    border: 2px solid var(--accent);
-    box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.22);
-    pointer-events: none;
-  }
-  #exp-log, #exp-rotlog { cursor: grab; touch-action: none; }
-  #exp-log:active, #exp-rotlog:active { cursor: grabbing; }
+  #exp-orig { will-change: transform; }
+  #exp-log { cursor: grab; touch-action: none; }
+  #exp-log:active { cursor: grabbing; }
+
   .plabel {
     position: absolute;
     left: 7px;
@@ -289,7 +282,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-top: 9px;
+    margin: 9px 0 0.4em;
     font-family: Inter, system-ui, sans-serif;
     font-size: 13px;
     color: var(--ink-2);
@@ -305,6 +298,7 @@
     border-radius: 7px;
     padding: 5px 13px;
     cursor: pointer;
+    flex-shrink: 0;
   }
   .exp-controls button:hover { border-color: var(--accent); color: var(--accent); }
   .exp-fallback { font-family: Inter, system-ui, sans-serif; font-size: 13.5px; color: var(--muted); }
@@ -362,7 +356,7 @@
   </div>
 </nav>
 
-<div class="wrap">
+<div class="wrap" id="exp-root">
 
   <header class="hero">
     <div class="card">
@@ -443,11 +437,12 @@
     what if it also <em>turns?</em>
   </p>
 
-  <figure class="fig-spiral">
-    <div class="frame">
-      <img src="/tententoon-demo.gif" alt="The same photograph, but the nested copies rotate as they shrink, winding the whole image into a smooth spiral." loading="lazy" />
+  <figure class="solo-panel live-panels">
+    <div class="panel-cell ar-img">
+      <span class="plabel">tententoon</span>
+      <canvas id="exp-escher"></canvas>
     </div>
-    <figcaption>The same photograph, bent. Made with this tool.</figcaption>
+    <figcaption>The same photograph, wound into a spiral &mdash; rendered live, right here. That is a <strong>tententoon</strong>.</figcaption>
   </figure>
 
   <p>
@@ -457,7 +452,6 @@
     twists &mdash; and nothing tears. Follow any line inward and it meets itself
     exactly. Zoom forever and you never find a seam.
   </p>
-  <p>That second picture is a <strong>tententoon</strong>.</p>
 
   <p class="pull">
     Same picture. Two infinities. One drops straight down; the other takes the
@@ -469,100 +463,72 @@
     All of it comes from one move: <strong>take the logarithm.</strong>
   </p>
   <p>
-    Shrinking-and-repeating is really multiplication &mdash; each copy is the last
-    one times some fixed ratio. And the one thing logarithms do for a living is
-    turn multiplication into addition. So look at the Droste picture through a
-    logarithm and &ldquo;shrink, then repeat&rdquo; becomes &ldquo;slide over, then
-    repeat&rdquo;: the endless nested frames unroll into a plain, evenly-spaced
-    grid. Straight. Boring. Repeating.
+    Measure every point by how far it sits from the centre <em>c</em> and at what
+    angle, then take the logarithm of the distance. Shrinking-and-repeating is
+    multiplication, and logarithms turn multiplication into addition &mdash; so the
+    endless nested frames unroll into a plain, repeating <em>lattice</em>: step
+    sideways by <em>log&nbsp;S</em> for one Droste jump, up or down by <em>2&pi;</em>
+    for one full turn around <em>c</em>. Straight. Boring. Tiling forever.
   </p>
   <p>
-    Now add the turn. A copy that shrinks <em>and</em> rotates is, in this
-    logarithm-world, a slide in two directions at once &mdash; sideways <em>and</em>
-    along. So the straight grid simply <strong>tilts</strong>. Tilt a repeating
-    grid, then roll it back up out of the logarithm, and that tilt becomes a
-    spiral. A tententoon is just Escher's straight Droste, leaning over.
-  </p>
-  <p>
-    And here is why it never tears. In logarithm-world the picture is only a
-    pattern that repeats every fixed step. Slide it by exactly one step and you
-    land on an identical picture &mdash; you cannot tell it moved. Roll that back
-    up, and &ldquo;one step&rdquo; becomes &ldquo;one full turn of the spiral.&rdquo;
-    The loop closes because the shift closes. The seam isn't hidden; there simply
-    isn't one.
+    And here is the surprise &mdash; in your fingertips. The panel on the left is
+    that lattice, <strong>log(z &minus; c)</strong>. <strong>Drag it.</strong> A
+    sideways drag <em>zooms</em> the original on the right; an up-and-down drag
+    <em>rotates</em> it. A slide in the log is nothing but a rotate-and-zoom back
+    in the original picture &mdash; that is the whole trick, and the readout keeps
+    the score.
   </p>
 
-  <h2>The same trick, in four pictures</h2>
-  <p>
-    Here is the whole move, live. The same photograph runs through all four frames
-    at once &mdash; only the ruler changes. <strong>Drag the log panel</strong>
-    (top-right): slide it <em>sideways to zoom</em>, <em>up and down to rotate</em>,
-    and watch the tententoon follow. That is the secret in your fingertips: in the
-    log world, sideways is scale and vertical is angle.
-  </p>
-
-  <figure class="explorable" id="explorable" aria-label="Interactive pipeline: source, log, rotated log, and tententoon">
-    <div class="exp-grid">
-      <div class="cell">
-        <span class="plabel">source</span>
-        <div class="src-wrap"><img id="exp-src" alt="the test photograph with its nest rectangle" /><div class="nest" id="exp-nest"></div></div>
-      </div>
-      <div class="cell">
+  <figure class="experiment live-panels" aria-label="Drag the log panel to zoom and rotate the original picture">
+    <div class="exp-pair">
+      <div class="panel-cell ar-img">
         <span class="plabel">log(z &minus; c) <span class="pchip">drag me</span></span>
         <canvas id="exp-log"></canvas>
         <span class="draghint">&harr; zoom&nbsp;&nbsp;&updownarrow; rotate</span>
       </div>
-      <div class="cell">
-        <span class="plabel">rotated log</span>
-        <canvas id="exp-rotlog"></canvas>
-      </div>
-      <div class="cell">
-        <span class="plabel">tententoon</span>
-        <canvas id="exp-escher"></canvas>
+      <div class="panel-cell ar-img">
+        <span class="plabel">the original</span>
+        <canvas id="exp-orig"></canvas>
       </div>
     </div>
-    <div class="exp-controls">
-      <span class="readout" id="exp-readout">drag the log panel &mdash; &harr; zoom, &updownarrow; rotate</span>
-      <button type="button" id="exp-reset">reset</button>
+  </figure>
+  <div class="exp-controls">
+    <span class="readout" id="exp-readout">drag the log panel &mdash; &harr; zoom, &updownarrow; rotate the original</span>
+    <button type="button" id="exp-reset">reset</button>
+  </div>
+  <p class="exp-fallback" id="exp-fallback" hidden>
+    This live experiment needs WebGL2 and JavaScript. In short: a sideways slide in
+    the log panel zooms the original picture, and a vertical slide rotates it.
+  </p>
+
+  <p>
+    Now add the turn for real. A copy that shrinks <em>and</em> rotates leans that
+    lattice over by a fixed angle, <em>&beta; = arctan(log&nbsp;S / 2&pi;)</em>
+    &mdash; the one tilt that lets the pattern still line up with itself after a
+    slide:
+  </p>
+
+  <figure class="solo-panel live-panels">
+    <div class="panel-cell ar-wide">
+      <span class="plabel">rotated log</span>
+      <canvas id="exp-rotlog"></canvas>
     </div>
-    <p class="exp-fallback" id="exp-fallback" hidden>
-      This live view needs WebGL2 and JavaScript. The four steps below describe exactly what it shows.
-    </p>
+    <figcaption>The same lattice, leaned over by <em>&beta;</em>. That lean is the whole difference between a Droste and an Escher.</figcaption>
   </figure>
 
-  <ol class="steps">
-    <li>
-      <strong>The picture, and a rectangle.</strong> Mark where the next copy
-      belongs. That single choice fixes everything else: how far each copy shrinks
-      (call it <em>S</em>), and the one point <em>c</em> that all the copies rush
-      toward.
-    </li>
-    <li>
-      <strong>Unroll it &mdash; log(z &minus; c).</strong> Re-measure every point by
-      how far it sits from <em>c</em> and at what angle, then take the logarithm of
-      the distance. The endless nested frames flatten into a plain, repeating
-      <em>lattice</em>: step sideways by <em>log&nbsp;S</em> and you have moved one
-      Droste jump; step up or down by <em>2&pi;</em> and you have gone once around
-      <em>c</em>. Straight. Boring. Tiling forever.
-    </li>
-    <li>
-      <strong>Lean it over.</strong> Tilt that lattice by a fixed angle,
-      <em>&beta; = arctan(log&nbsp;S / 2&pi;)</em>. Nothing tears: a pattern that
-      repeats every tile looks identical after you slide it by one tile, so it
-      survives the lean unscarred. That lean is the whole difference between a
-      Droste and an Escher.
-    </li>
-    <li>
-      <strong>Roll it back up.</strong> Undo the logarithm and the tilted lattice
-      winds into the tententoon &mdash; one seamless spiral. In a single line it is
-      the map <em>w(z) = c + (z &minus; c)<sup>&alpha;</sup></em> with
-      <em>&alpha; = 1 &minus; i&middot;(log&nbsp;S / 2&pi;)</em>: the real part
-      carries the picture, the imaginary part is the lean.
-    </li>
-  </ol>
   <p>
-    The seam never shows because in the two flat middle frames there is nothing to
-    tear &mdash; only a pattern, repeating.
+    Roll the logarithm back up and the tilted lattice winds into the spiral you saw
+    above &mdash; the tententoon. In a single line it is the map
+    <em>w(z) = c + (z &minus; c)<sup>&alpha;</sup></em> with
+    <em>&alpha; = 1 &minus; i&middot;(log&nbsp;S / 2&pi;)</em>: the real part carries
+    the picture, the imaginary part is the lean.
+  </p>
+  <p>
+    And here is why it never tears. In the lattice there is nothing to tear &mdash;
+    only a pattern that repeats. Slide it by exactly one tile and you land on an
+    identical picture; roll that back up and &ldquo;one tile&rdquo; becomes
+    &ldquo;one full turn of the spiral.&rdquo; The loop closes because the shift
+    closes. The seam isn't hidden; there simply isn't one.
   </p>
 
   <h2>Escher got there first &mdash; by hand</h2>
