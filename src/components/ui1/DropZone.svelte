@@ -6,6 +6,7 @@
   import { markSourceLoaded } from '../../lib/ui1/tententoon.svelte';
   import { putBlob } from '../../lib/ui1/persistence';
   import { publicAssetUrl } from '../../lib/asset-url';
+  import { makeTestPattern, patternNest, type PatternKind } from '../../lib/ui1/test-patterns';
 
   let dragOver = $state(false);
   let input: HTMLInputElement;
@@ -50,6 +51,18 @@
     }
   }
 
+  // Generated geometry patterns. A centred square nest puts the limit point
+  // at the image centre, so the polar pattern maps to a clean grid in the
+  // log panel — the clearest way to see what the transform does.
+  async function tryPattern(kind: PatternKind) {
+    const bmp = await makeTestPattern(kind);
+    // Ephemeral test input — load it as the working image without touching
+    // the gallery/persistence source tracking (patterns aren't files).
+    setImage(bmp, kind === 'polar' ? 'Polar grid' : 'Cartesian grid');
+    commitNewRect(patternNest());
+    errorMsg = null;
+  }
+
   function onPaste(e: ClipboardEvent) {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -89,6 +102,11 @@
       <Icon name="upload" size={14} />Choose file
     </button>
     <button class="btn ghost" onclick={trySample}>Try with sample</button>
+  </div>
+  <div class="patterns">
+    <span class="plabel mono">or a geometry test pattern:</span>
+    <button class="btn chip" onclick={() => tryPattern('polar')}>Polar grid</button>
+    <button class="btn chip" onclick={() => tryPattern('grid')}>Cartesian grid</button>
   </div>
   <span class="footnote mono">Stays in your browser. Nothing uploaded.</span>
   {#if errorMsg}
@@ -164,6 +182,15 @@
     border-color: var(--accent);
   }
   .btn.ghost { background: transparent; border-color: transparent; }
+  .btn.chip { padding: 5px 10px; font-size: 12px; }
+  .patterns {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .plabel { font-size: 12px; color: var(--muted); }
   .footnote { font-size: 11px; color: var(--muted); margin-top: 6px; font-family: var(--font-mono); text-align: center; }
   .error { font-size: 11px; color: var(--accent); margin-top: 4px; font-family: var(--font-mono); }
   .mono { font-family: var(--font-mono); }

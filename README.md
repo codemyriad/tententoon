@@ -66,4 +66,4 @@ Svelte 5 (runes) + Vite. Rendering is WebGL via [twgl.js](https://twgljs.org/) w
 - **Print Gallery** / *Prentententoonstelling* — M. C. Escher, 1956. Escher's works are © The M. C. Escher Company; referenced here by description and link, not reproduced.
 - **The mathematical completion** — Bart de Smit & Hendrik Lenstra, *The Mathematical Structure of Escher's Print Gallery*, [Notices of the AMS, 2003](https://www.ams.org/notices/200304/fea-escher.pdf).
 - **Demo image** — *Droste effect* by [Nevit Dilmen](https://commons.wikimedia.org/wiki/File:Droste_1260359-nevit.jpg), [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) (see `public/ATTRIBUTION.txt`).
-- **Code** — MIT.
+- **Code** — [AGPLv3 or later](LICENSE) (the sample image keeps its own CC BY-SA 3.0 licence).

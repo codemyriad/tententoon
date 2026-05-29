@@ -21,3 +21,4 @@ export {
 } from './undo-log';
 export { putThumb, getThumb, deleteThumb } from './thumbs';
 export { gcOrphanBlobs } from './gc';
+export { recoverSourceBlob, type RecoveredSourceBlob } from './legacy-history';
