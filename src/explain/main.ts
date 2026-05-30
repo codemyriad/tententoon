@@ -32,6 +32,7 @@ import {
 import { PipelinePanelGLRenderer } from '../lib/render/pipeline-gl';
 import type { DrosteCtx } from '../lib/math/transforms';
 import { makeSource, type SourceMode } from './patterns';
+import { initPlayground } from './playground';
 
 const SOURCE = '/Droste_1260359-nevit.jpg';
 const PHOTO_NEST: Rect | null = { x: 343.2, y: 334.7, w: 583.5, h: 454.9 };
@@ -439,3 +440,4 @@ async function main(): Promise<void> {
 }
 
 void main();
+initPlayground();

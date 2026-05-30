@@ -394,6 +394,106 @@
   }
   .analogy svg { display: block; width: 100%; height: auto; }
 
+  /* ── Function playground (src/explain/playground.ts) ──────────────────────
+     A free complex-function explorer that runs before the tententoon build:
+     input plane | function selector | output plane. Breaks out wider than the
+     text column on desktop; stacks on narrow screens. */
+  .playground {
+    width: min(96vw, 1180px);
+    position: relative;
+    left: 50%;
+    transform: translateX(-50%);
+    display: grid;
+    grid-template-columns: 1fr 230px 1fr;
+    gap: 18px;
+    align-items: start;
+    margin: 1.8em 0 0.4em;
+  }
+  .pg-side { margin: 0; display: flex; flex-direction: column; gap: 9px; }
+  .pg-side .panel-cell { aspect-ratio: 1 / 1; box-shadow: 0 14px 38px rgba(20, 14, 10, 0.18); }
+  #pg-in { cursor: grab; touch-action: none; }
+  #pg-in:active { cursor: grabbing; }
+  .pg-cap {
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 12.5px;
+    color: var(--ink-2);
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .pg-cap .who { color: var(--muted); }
+  .pg-cap .val { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--accent-deep); }
+
+  .pg-mid {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    padding: 14px;
+    box-shadow: 0 10px 30px rgba(20, 14, 10, 0.08);
+  }
+  .pg-mid .lbl {
+    font-family: Inter, system-ui, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--muted);
+  }
+  .pg-fns { display: flex; flex-direction: column; gap: 6px; }
+  .pg-fn {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-style: italic;
+    font-size: 15px;
+    text-align: left;
+    color: var(--ink-2);
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 7px 11px;
+    cursor: pointer;
+  }
+  .pg-fn:hover { border-color: var(--accent); color: var(--accent); }
+  .pg-fn.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .pg-layers { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pg-layers button {
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-2);
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    border-radius: 7px;
+    padding: 5px 11px;
+    cursor: pointer;
+  }
+  .pg-layers button:hover { border-color: var(--accent); color: var(--accent); }
+  .pg-layers button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .pg-tee { display: flex; flex-direction: column; gap: 6px; }
+  .pg-tee input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+  .pg-tee .ends {
+    display: flex;
+    justify-content: space-between;
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-style: italic;
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  .pg-mid .btn { align-self: flex-start; }
+
+  @media (max-width: 820px) {
+    .playground {
+      width: 100%;
+      left: auto;
+      transform: none;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    .pg-mid { order: -1; }
+  }
+
   /* The three-step pipeline: log → bend → exp. Breaks out wider than the
      text column on desktop; stacks to one column on narrow screens. */
   .pipeline {
@@ -661,14 +761,113 @@
     <b>turn</b> a little as it shrinks, and the stack winds into a spiral.
   </p>
 
-  <h2>Bending it without breaking it</h2>
   <p>
-    Bending the picture directly &mdash; curving every line by hand and praying the
-    ends still meet &mdash; is hopeless. So we take a detour in three moves:
-    <strong>flatten</strong> the nesting into a plain strip, <strong>lean</strong>
-    the strip over, then <strong>roll it back up</strong>. The three panels below
-    are those moves, wired together &mdash; move any control and the whole row
-    answers at once.
+    To build that, we need one idea first &mdash; the one Escher was really using
+    when he drew his curved grid by hand. So before the spiral, a short detour to
+    pick up the language the rest of the page speaks.
+  </p>
+
+  <h2>First, what is a function?</h2>
+  <p>
+    A function is a rule with an input and an output. For us the input is a point
+    on the plane, and the output is another point:
+  </p>
+  <p class="formula"><em>z</em> &rarr; <em>f</em>(<em>z</em>)</p>
+  <p>
+    So if <em>z</em> is one point on the picture, <em>f</em>(<em>z</em>) tells us
+    where that point goes. Now do it for <em>every</em> point at once. The grid
+    moves. The rings move. The photo moves. That is all a warp is: one function,
+    evaluated everywhere.
+  </p>
+  <p>
+    Drag the point on the left and watch where it lands on the right. Switch the
+    function. Then turn on the grid, and the formula stops being a formula &mdash;
+    it becomes a machine moving the plane.
+  </p>
+
+  <figure class="playground" id="pg-root" aria-label="A function playground: an input plane on the left, a function selector in the middle, and the output plane on the right. Drag the point on the input plane to see where the chosen function sends it.">
+    <div class="pg-side">
+      <div class="panel-cell">
+        <span class="plabel">input plane <span class="pchip">drag me</span></span>
+        <canvas id="pg-in"></canvas>
+      </div>
+      <div class="pg-cap"><span class="who">input</span><span><em>z</em> = <span class="val" id="pg-z"></span></span></div>
+    </div>
+    <div class="pg-mid">
+      <div>
+        <div class="lbl">function</div>
+        <div class="pg-fns">
+          <button type="button" class="pg-fn" data-fn="id"><em>f</em>(<em>z</em>) = <em>z</em></button>
+          <button type="button" class="pg-fn" data-fn="double"><em>f</em>(<em>z</em>) = 2<em>z</em></button>
+          <button type="button" class="pg-fn" data-fn="rot"><em>f</em>(<em>z</em>) = <em>iz</em></button>
+          <button type="button" class="pg-fn" data-fn="square"><em>f</em>(<em>z</em>) = <em>z</em><sup>2</sup></button>
+          <button type="button" class="pg-fn" data-fn="exp"><em>f</em>(<em>z</em>) = exp(<em>z</em>)</button>
+          <button type="button" class="pg-fn" data-fn="log"><em>f</em>(<em>z</em>) = log(<em>z</em>)</button>
+        </div>
+      </div>
+      <div>
+        <div class="lbl">show</div>
+        <div class="pg-layers">
+          <button type="button" data-layer="grid">grid</button>
+          <button type="button" data-layer="rings">rings</button>
+          <button type="button" data-layer="image">photo</button>
+        </div>
+      </div>
+      <div class="pg-tee">
+        <div class="lbl">identity &rarr; function</div>
+        <input type="range" id="pg-t" aria-label="scrub from the identity to the chosen function" />
+        <div class="ends"><span><em>z</em></span><span><em>f</em>(<em>z</em>)</span></div>
+      </div>
+      <button type="button" class="btn" id="pg-reset">reset</button>
+    </div>
+    <div class="pg-side">
+      <div class="panel-cell">
+        <span class="plabel">output plane</span>
+        <canvas id="pg-out"></canvas>
+      </div>
+      <div class="pg-cap"><span class="who">output</span><span><em>f</em>(<em>z</em>) = <span class="val" id="pg-fz"></span></span></div>
+    </div>
+  </figure>
+  <p class="aside">
+    The <em>identity&nbsp;&rarr;&nbsp;function</em> slider doesn't jump straight to
+    <em>f</em>(<em>z</em>); it pulls the plane there continuously, so you can watch
+    the motion instead of just the before and after. (That in-between is a teaching
+    aid, not the real map.)
+  </p>
+
+  <p>
+    Walk down the list and the moves get bolder. <em>f</em>(<em>z</em>)&nbsp;=&nbsp;<em>z</em>
+    leaves every point exactly where it was &mdash; dull, but it's the baseline.
+    <em>f</em>(<em>z</em>)&nbsp;=&nbsp;2<em>z</em> doubles every distance from the
+    centre: pure scale. <em>f</em>(<em>z</em>)&nbsp;=&nbsp;<em>iz</em> turns
+    everything a quarter-turn: multiplication can <em>mean</em> rotation. Put those
+    two together and you get a scale-and-spin in one step &mdash; which is exactly
+    the move the spiral will need.
+  </p>
+  <p>
+    Then the plane starts to bend. <em>f</em>(<em>z</em>)&nbsp;=&nbsp;<em>z</em><sup>2</sup>
+    curves the whole grid, yet&mdash;look closely&mdash;the little squares stay
+    nearly square. The last two are the pair this whole page turns on:
+    <strong>exp</strong> rolls the plane around the origin, so upright lines become
+    rings; and <strong>log</strong> is its undo, unrolling those rings back into
+    upright lines. Hold on to that. The tententoon is built from precisely those
+    two, with a scale-and-spin wedged between them.
+  </p>
+
+  <h2>The function we need</h2>
+  <p>
+    Now we can state the job. We have a Droste image: zoom in by the right amount
+    and the same picture appears again. We want a single function where moving
+    <em>around</em> the centre also carries us one Droste step <em>inward</em>
+    &mdash; turning and zooming folded into the same motion.
+  </p>
+  <p>
+    From the playground we already have the parts. The detour is three moves:
+    <strong>log</strong> to unroll the rings into a flat repeating strip, a
+    <strong>scale-and-spin</strong> to lean that strip until its copies line up
+    diagonally, and <strong>exp</strong> to roll the strip back into rings. The
+    three panels below are those moves, wired together &mdash; move any control and
+    the whole row answers at once.
   </p>
 
   <figure class="pipeline live-panels" aria-label="The original picture, then three connected transforms: the flat log strip, the strip leaned over, and the strip rolled back up into a spiral.">
@@ -857,6 +1056,25 @@
     &mdash; leave the strip upright and it rolls into the straight Droste fall; lean
     it first and it rolls into Escher's spiral. Same picture, same roll &mdash; only
     the lean is different.
+  </p>
+
+  <h2>Why the picture still looks like a picture</h2>
+  <p>
+    A careless warp wrecks an image: squares shear into parallelograms, faces
+    smear, straight edges buckle. The overall shape might land where you wanted,
+    but up close the picture stops being readable. Escher needed the opposite
+    &mdash; an enormous global bend in which every <em>small</em> neighbourhood
+    stays almost untouched.
+  </p>
+  <p>
+    This is the real work the playground's <em>z</em><sup>2</sup>, <strong>exp</strong>,
+    and <strong>log</strong> were doing. Near any single point, each of them acts
+    like nothing more than a scale plus a rotation &mdash; not a squash, not a
+    shear. So the whole plane can twist violently around itself while the little
+    squares stay square. Turn the grid back on and watch one tile through the
+    bend: it moves and turns and shrinks, but it keeps its shape. That is why this
+    family of functions is the right tool for warping a photograph, and it is the
+    quiet reason the spiral still reads as Escher's gallery rather than a smear.
   </p>
 
   <h2>Escher got there first, by hand</h2>
