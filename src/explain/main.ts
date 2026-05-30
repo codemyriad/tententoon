@@ -1,27 +1,25 @@
 /**
- * Live, interactive panels for explain.html — every one rendered by the app's
- * own GPU pipeline (PipelinePanelGLRenderer), so there is no duplicated map
- * math. The page is a guided explorable; this file is its engine.
+ * Live engine for explain.html — every panel rendered by the app's own GPU
+ * pipeline (PipelinePanelGLRenderer), so there is no duplicated map math.
  *
- *   #exp-escher  — the hero tententoon spiral. Its twist follows the
- *                  Droste⟷Escher slider; at the closing angle β it seals into a
- *                  seamless spiral and the panel lights up "closed ✓".
- *   #exp-unroll  — the unroll. Morphs the spiral (morph = 1) into the flat
- *                  rotated-log strip (morph = 0), so "take the logarithm" is
- *                  something you watch happen rather than a formula to trust.
- *   #exp-log     — log(z − c), DRAGGABLE.  +  #exp-orig — "the original".
- *                  A sideways slide in the log zooms the picture; an up/down
- *                  slide rotates it. The readout keeps the score.
+ * The page's spine is one pipeline, shown as three connected panels that all
+ * move together in realtime:
  *
- * Two test geometries feed the panels so the bend can be both honest AND
- * dramatic:
- *   • the PHOTO at its own gentle nesting (S ≈ 2.1, β ≈ 6.8°) — the "picture"
- *     and "overlay" sources, faithful but subtle;
- *   • a BOLD synthetic geometry (S = 20, β ≈ 25.5°, all but Escher's own 26°)
- *     for the scale-invariant "polar" and "grid" patterns, which stay seamless
- *     at any scale, so we can crank the twist right up.
- * Switching source switches geometry; the slider's β and the "closed" mark
- * follow along.
+ *   #exp-log   — "we log it":   log(z − c), the flat repeating strip.
+ *   #exp-bend  — "we bend it":  the same strip leaned over by the bend angle.
+ *   #exp-exp   — "we exponentiate it": rolled back up into the tententoon spiral.
+ *
+ * One bend slider leans #exp-bend and twists #exp-exp at once. Dragging the flat
+ * #exp-log strip pans all three (a slide in the flat world is a zoom-and-turn in
+ * the round one). #exp-exp also rolls between the flat strip (roll 0) and the
+ * spiral (roll 1), so you can watch the exponential happen.
+ *
+ * Two geometries feed the panels so the bend is both honest and dramatic:
+ *   • the PHOTO at its own gentle nesting (S ≈ 2.1, β ≈ 6.8°) — "photo"/"overlay";
+ *   • a BOLD synthetic geometry (S = 20, β ≈ 25.5°, near Escher's 26°) for the
+ *     scale-invariant "ring"/"grid" patterns, which stay seamless at any scale.
+ * Switching source switches geometry; the bend slider's β and the "closed" mark
+ * follow. The source switcher is repeated under each panel but drives one state.
  */
 
 import { fitCropToNest, type Rect } from '../lib/math/droste';
@@ -35,18 +33,13 @@ import { PipelinePanelGLRenderer } from '../lib/render/pipeline-gl';
 import type { DrosteCtx } from '../lib/math/transforms';
 import { makeSource, type SourceMode } from './patterns';
 
-// ─── Test image + its nest ──────────────────────────────────────────────────
-// NEST is in *image pixels*: load the photo in the editor, draw the rectangle,
-// read x / y / w / h off the readout. null → a centred ~half-size nest (S ≈ 2).
 const SOURCE = '/Droste_1260359-nevit.jpg';
 const PHOTO_NEST: Rect | null = { x: 343.2, y: 334.7, w: 583.5, h: 454.9 };
-// Bold synthetic scale: β = atan(ln 20 / 2π) ≈ 25.5°, a hair under Escher's 26°.
-const BOLD_S = 20;
-// ─────────────────────────────────────────────────────────────────────────────
+const BOLD_S = 20; // β = atan(ln 20 / 2π) ≈ 25.5°, a hair under Escher's 26°
 
 const TWO_PI = 2 * Math.PI;
 const MAX_PX = 720;
-const TWIST_MAX_DEG = 40; // slider headroom past the boldest closing angle
+const BEND_MAX_DEG = 40; // slider headroom past the boldest closing angle
 const RAD = Math.PI / 180;
 
 const byId = <T extends Element>(id: string) => document.getElementById(id) as T | null;
@@ -64,7 +57,6 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
-const clamp01 = (t: number) => (t < 0 ? 0 : t > 1 ? 1 : t);
 
 /**
  * A synthetic Droste geometry with the limit point at the centre of a
@@ -82,8 +74,8 @@ function boldGeometry(texW: number, texH: number, S: number): PanelGeometry {
   return { ctx, R0: rMax / Math.sqrt(S), S };
 }
 
-type Role = 'hero' | 'unroll' | 'log' | 'orig';
-type Panel = { role: Role; canvas: HTMLCanvasElement; renderer: PipelinePanelGLRenderer };
+type Role = 'orig' | 'log' | 'bend' | 'exp';
+type Panel = { role: Role; canvas: HTMLCanvasElement; cell: HTMLElement | null; renderer: PipelinePanelGLRenderer };
 type GeomInfo = {
   geom: PanelGeometry;
   uRef: number;
@@ -129,15 +121,13 @@ async function main(): Promise<void> {
   }
   const cImgX = crop.x + gPhoto.ctx.cx;
   const cImgY = crop.y + gPhoto.ctx.cy;
-  const photoS = gPhoto.S; // capture once: the guard above narrows gPhoto here
+  const photoS = gPhoto.S;
 
-  // ── Bold geometry (dramatic, seamless) — match the crop aspect so the cells
-  //    keep their size when you switch source. ──────────────────────────────
+  // ── Bold geometry (dramatic, seamless) — matches the crop aspect ───────────
   const texH = Math.min(960, Math.round(crop.h));
   const texW = Math.round(texH * (crop.w / crop.h));
   const gBold = boldGeometry(texW, texH, BOLD_S);
 
-  // Image-aspect cells so the "original" reads undistorted; bold shares it.
   root.style.setProperty('--cell-ar', `${crop.w} / ${crop.h}`);
 
   function infoFor(geom: PanelGeometry): GeomInfo {
@@ -155,7 +145,6 @@ async function main(): Promise<void> {
   const isBold = (m: SourceMode) => m === 'grid' || m === 'polar';
   const infoForSource = (m: SourceMode): GeomInfo => (isBold(m) ? boldInfo : photoInfo);
 
-  // Source textures are expensive to draw — build each once, on first use.
   const texCache = new Map<SourceMode, ImageData>();
   function pixelsFor(m: SourceMode): ImageData {
     const hit = texCache.get(m);
@@ -167,25 +156,18 @@ async function main(): Promise<void> {
     return img;
   }
 
-  const reduceMotion =
-    typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-
   // ── State ──────────────────────────────────────────────────────────────────
   const state = {
-    source: 'polar' as SourceMode,
-    angle: boldInfo.beta, // twist of the hero/unroll spiral; starts closed
-    panU: 0, // drag-the-log pan (drives #exp-log + #exp-orig only)
+    source: 'overlay' as SourceMode,
+    angle: photoInfo.beta, // the bend; starts at the closing angle of the active geometry
+    panU: 0, // shared pan from dragging the flat strip (slide = zoom/turn)
     panV: 0,
-    morph: 1, // unroll: 1 = rolled-up spiral … 0 = flat strip
-    playing: false // unroll auto-morph running
+    roll: 1 // exp panel: 0 = flat bent strip … 1 = rolled-up spiral (default)
   };
 
   // ── Panels ───────────────────────────────────────────────────────────────
   const idByRole: Record<Role, string> = {
-    hero: 'exp-escher',
-    unroll: 'exp-unroll',
-    log: 'exp-log',
-    orig: 'exp-orig'
+    orig: 'exp-orig', log: 'exp-log', bend: 'exp-bend', exp: 'exp-exp'
   };
   const panels: Panel[] = [];
   try {
@@ -194,7 +176,7 @@ async function main(): Promise<void> {
       if (!canvas) continue;
       const renderer = new PipelinePanelGLRenderer();
       renderer.init(canvas);
-      panels.push({ role, canvas, renderer });
+      panels.push({ role, canvas, cell: canvas.closest('.panel-cell'), renderer });
     }
   } catch {
     for (const p of panels) p.renderer.dispose();
@@ -225,19 +207,11 @@ async function main(): Promise<void> {
     const ctx = info.geom.ctx;
     const pixels = pixelsFor(state.source);
     const a = state.angle;
-    const k = Math.tan(a);
     switch (p.role) {
-      case 'hero':
+      case 'orig': // the input picture itself (no twist), zoomed/turned by the pan
         p.renderer.render({
           pixels, ctx, mode: 'escher', W: cw, H: ch,
-          scale: cw / ctx.W, lnR0: info.lnR0, kTwist: k
-        });
-        break;
-      case 'unroll':
-        p.renderer.render({
-          pixels, ctx, mode: 'unroll', W: cw, H: ch,
-          pxPerUnit: panelPxPerUnit('rotlog', ctx.logS, ch),
-          uRef: info.uRef, lnR0: info.lnR0, rot: a, kTwist: k, morph: state.morph
+          scale: cw / ctx.W, lnR0: info.lnR0, kTwist: 0, panU: state.panU, panV: state.panV
         });
         break;
       case 'log':
@@ -247,28 +221,34 @@ async function main(): Promise<void> {
           uRef: info.uRef, panU: state.panU, panV: state.panV
         });
         break;
-      case 'orig':
+      case 'bend':
         p.renderer.render({
-          pixels, ctx, mode: 'escher', W: cw, H: ch,
-          scale: cw / ctx.W, lnR0: info.lnR0, kTwist: 0, panU: state.panU, panV: state.panV
+          pixels, ctx, mode: 'rotlog', W: cw, H: ch,
+          pxPerUnit: panelPxPerUnit('rotlog', ctx.logS, ch),
+          uRef: info.uRef, rot: a, panU: state.panU, panV: state.panV
+        });
+        break;
+      case 'exp':
+        p.renderer.render({
+          pixels, ctx, mode: 'unroll', W: cw, H: ch,
+          pxPerUnit: panelPxPerUnit('rotlog', ctx.logS, ch),
+          uRef: info.uRef, lnR0: info.lnR0, rot: a, kTwist: Math.tan(a),
+          morph: state.roll, panU: state.panU, panV: state.panV
         });
         break;
     }
   }
 
-  // ── Render scheduler (handles discrete updates + running animations) ───────
+  // ── Render scheduler (discrete updates + running animations) ───────────────
   let raf = 0;
   let dirtyAll = false;
   const dirty = new Set<Role>();
   let last = performance.now();
 
-  // twist snap-to-β tween
   let snapping = false;
   let snapFrom = 0;
   let snapTo = 0;
   let snapT = 0;
-  // unroll ping-pong
-  let morphPhase = 0;
 
   function schedule(only?: Role[]): void {
     if (only) only.forEach((r) => dirty.add(r));
@@ -286,20 +266,11 @@ async function main(): Promise<void> {
       snapT += dt / 0.45;
       const e = snapT >= 1 ? 1 : easeOutCubic(snapT);
       state.angle = snapFrom + (snapTo - snapFrom) * e;
-      syncTwistUI();
-      dirty.add('hero');
-      dirty.add('unroll');
+      syncBendUI();
+      dirty.add('bend');
+      dirty.add('exp');
       if (snapT >= 1) snapping = false;
       else more = true;
-    }
-
-    if (state.playing) {
-      morphPhase += dt / 2.4; // ~2.4s each way
-      const tri = 1 - Math.abs(1 - (morphPhase % 2)); // 0 → 1 → 0 triangle
-      state.morph = tri;
-      syncUnrollUI();
-      dirty.add('unroll');
-      more = true;
     }
 
     const all = dirtyAll;
@@ -315,100 +286,88 @@ async function main(): Promise<void> {
   function updateReadout(): void {
     if (!readout) return;
     if (state.panU === 0 && state.panV === 0) {
-      readout.textContent = 'drag the log: ↔ zooms the picture, ↕ spins it';
+      readout.textContent = 'drag the flat strip: ↔ zooms everything, ↕ turns it';
       return;
     }
     const zoom = Math.exp(state.panU);
     let deg = ((state.panV * 180) / Math.PI) % 360;
     if (deg < 0) deg += 360;
-    readout.textContent = `the picture is now zoomed ×${zoom.toFixed(2)} and turned ${deg.toFixed(0)}°`;
+    readout.textContent = `slid by ${state.panU >= 0 ? '+' : ''}${state.panU.toFixed(2)} → zoom ×${zoom.toFixed(2)}, turn ${deg.toFixed(0)}°`;
   }
 
-  // ── Twist (Droste ⟷ Escher) ────────────────────────────────────────────────
-  const twist = byId<HTMLInputElement>('exp-twist');
-  const twistVal = byId<HTMLElement>('exp-twist-val');
-  const twistNote = byId<HTMLElement>('exp-twist-note');
-  const heroCell = panels.find((p) => p.role === 'hero')?.canvas.closest('.panel-cell') ?? null;
+  // ── Bend (the lean that becomes the twist) ─────────────────────────────────
+  const bend = byId<HTMLInputElement>('exp-bend-range');
+  const bendVal = byId<HTMLElement>('exp-bend-val');
+  const bendNote = byId<HTMLElement>('exp-bend-note');
+  const bendCells = panels.filter((p) => p.role === 'bend' || p.role === 'exp').map((p) => p.cell);
+  const mS = byId<HTMLElement>('m-s');
+  const mLogS = byId<HTMLElement>('m-logs');
+  const mK = byId<HTMLElement>('m-k');
+  const fmtS = (s: number) => (s < 10 ? s.toFixed(2) : s.toFixed(0));
 
-  function syncTwistUI(): void {
+  function syncBendUI(): void {
     const deg = state.angle / RAD;
     const betaDeg = infoForSource(state.source).betaDeg;
     const closed = Math.abs(deg - betaDeg) < 0.4;
-    if (twist && document.activeElement !== twist) twist.value = deg.toFixed(1);
-    if (twistVal) {
-      twistVal.textContent = `${deg.toFixed(1)}°`;
-      twistVal.classList.toggle('closed', closed);
+    if (bend && document.activeElement !== bend) bend.value = deg.toFixed(1);
+    if (bendVal) {
+      bendVal.textContent = `${deg.toFixed(1)}°`;
+      bendVal.classList.toggle('closed', closed);
     }
-    heroCell?.classList.toggle('is-closed', closed);
-    if (twistNote) {
-      twistNote.innerHTML = closed
-        ? 'closed ✓ — every line meets itself'
-        : `closes at <em>β</em> ≈ ${betaDeg.toFixed(1)}°`;
+    bendCells.forEach((c) => c?.classList.toggle('is-closed', closed));
+    if (bendNote) {
+      bendNote.innerHTML = closed
+        ? 'closed ✓ — the tiles line back up'
+        : `lines up at <em>β</em> ≈ ${betaDeg.toFixed(1)}°`;
     }
+    // Live map values from the user's source + lean choices.
+    const info = infoForSource(state.source);
+    if (mS) mS.textContent = fmtS(info.geom.S);
+    if (mLogS) mLogS.textContent = info.geom.ctx.logS.toFixed(2);
+    if (mK) mK.textContent = Math.tan(state.angle).toFixed(2);
   }
 
-  function setTwistDeg(deg: number): void {
+  function setBendDeg(deg: number): void {
     state.angle = deg * RAD;
     snapping = false;
-    syncTwistUI();
-    schedule(['hero', 'unroll']);
+    syncBendUI();
+    schedule(['bend', 'exp']);
   }
 
-  if (twist) {
-    twist.min = '0';
-    twist.max = String(TWIST_MAX_DEG);
-    twist.step = '0.1';
-    twist.value = boldInfo.betaDeg.toFixed(1);
-    twist.addEventListener('input', () => setTwistDeg(parseFloat(twist.value)));
+  if (bend) {
+    bend.min = '0';
+    bend.max = String(BEND_MAX_DEG);
+    bend.step = '0.1';
+    bend.value = photoInfo.betaDeg.toFixed(1);
+    bend.addEventListener('input', () => setBendDeg(parseFloat(bend.value)));
   }
-
-  byId<HTMLButtonElement>('exp-twist-snap')?.addEventListener('click', () => {
+  byId<HTMLButtonElement>('exp-bend-snap')?.addEventListener('click', () => {
     snapFrom = state.angle;
     snapTo = infoForSource(state.source).beta;
     snapT = 0;
     snapping = true;
-    schedule(['hero', 'unroll']);
+    schedule(['bend', 'exp']);
   });
 
-  // ── Unroll ─────────────────────────────────────────────────────────────────
-  const unrollRange = byId<HTMLInputElement>('exp-unroll-range');
-  const unrollVal = byId<HTMLElement>('exp-unroll-val');
-  const unrollPlay = byId<HTMLButtonElement>('exp-unroll-play');
+  // ── Roll (the exponential: flat strip → spiral) ────────────────────────────
+  const roll = byId<HTMLInputElement>('exp-roll');
 
-  function syncUnrollUI(): void {
-    if (unrollRange && document.activeElement !== unrollRange) {
-      unrollRange.value = String(Math.round(state.morph * 100));
-    }
-    if (unrollVal) {
-      unrollVal.textContent =
-        state.morph > 0.97 ? 'rolled up' : state.morph < 0.03 ? 'unrolled flat' : 'unrolling…';
-    }
-    if (unrollPlay) unrollPlay.textContent = state.playing ? '❚❚ pause' : '▶ play';
+  function syncRollUI(): void {
+    if (roll && document.activeElement !== roll) roll.value = String(Math.round(state.roll * 100));
   }
-
-  if (unrollRange) {
-    unrollRange.min = '0';
-    unrollRange.max = '100';
-    unrollRange.step = '1';
-    unrollRange.value = '100';
-    unrollRange.addEventListener('input', () => {
-      state.playing = false;
-      state.morph = parseFloat(unrollRange.value) / 100;
-      syncUnrollUI();
-      schedule(['unroll']);
+  if (roll) {
+    roll.min = '0';
+    roll.max = '100';
+    roll.step = '1';
+    roll.value = '100';
+    roll.addEventListener('input', () => {
+      state.roll = parseFloat(roll.value) / 100;
+      syncRollUI();
+      schedule(['exp']);
     });
   }
-  unrollPlay?.addEventListener('click', () => {
-    state.playing = !state.playing;
-    if (state.playing) {
-      morphPhase = state.morph; // continue from where the slider left it
-      last = performance.now();
-    }
-    syncUnrollUI();
-    schedule(['unroll']);
-  });
 
-  // ── Source mode ────────────────────────────────────────────────────────────
+  // ── Source mode (one global state; switcher repeated under each panel) ─────
   function setSource(mode: SourceMode): void {
     state.source = mode;
     state.angle = infoForSource(mode).beta; // reset to the closing angle of the new geometry
@@ -416,14 +375,14 @@ async function main(): Promise<void> {
     document.querySelectorAll<HTMLElement>('[data-source]').forEach((b) => {
       b.classList.toggle('on', b.dataset.source === mode);
     });
-    syncTwistUI();
-    schedule(); // new texture + geometry → re-render every panel
+    syncBendUI();
+    schedule();
   }
   document.querySelectorAll<HTMLElement>('[data-source]').forEach((b) => {
     b.addEventListener('click', () => setSource((b.dataset.source as SourceMode) ?? 'polar'));
   });
 
-  // ── Drag-to-pan on the log panel ───────────────────────────────────────────
+  // ── Drag the flat strip → pan every panel (slide = zoom + turn) ────────────
   const logCanvas = byId<HTMLCanvasElement>('exp-log');
   if (logCanvas) {
     let active = false;
@@ -436,7 +395,7 @@ async function main(): Promise<void> {
       try {
         logCanvas.setPointerCapture(e.pointerId);
       } catch {
-        /* not capturable (synthetic event) */
+        /* not capturable */
       }
       e.preventDefault();
     });
@@ -444,11 +403,12 @@ async function main(): Promise<void> {
       if (!active) return;
       const h = logCanvas.getBoundingClientRect().height || 1;
       const perUnit = h / TWO_PI; // one cell height = 2π = one full turn
-      state.panU += (e.clientX - lastX) / perUnit;
-      state.panV += (e.clientY - lastY) / perUnit;
+      // Natural drag: the strip follows the pointer (content moves with the hand).
+      state.panU -= (e.clientX - lastX) / perUnit;
+      state.panV -= (e.clientY - lastY) / perUnit;
       lastX = e.clientX;
       lastY = e.clientY;
-      schedule(['log', 'orig']);
+      schedule(['log', 'bend', 'exp']);
     });
     const end = (e: PointerEvent) => {
       active = false;
@@ -465,45 +425,15 @@ async function main(): Promise<void> {
   byId<HTMLButtonElement>('exp-reset')?.addEventListener('click', () => {
     state.panU = 0;
     state.panV = 0;
-    schedule(['log', 'orig']);
+    schedule(['log', 'bend', 'exp']);
   });
-
-  // Pause the unroll animation while it's scrolled out of view (saves battery).
-  const unrollCanvas = byId<HTMLCanvasElement>('exp-unroll');
-  if (unrollCanvas && 'IntersectionObserver' in window) {
-    let wasPlaying = false;
-    new IntersectionObserver(
-      (entries) => {
-        const vis = entries[0]?.isIntersecting ?? true;
-        if (!vis && state.playing) {
-          wasPlaying = true;
-          state.playing = false;
-          syncUnrollUI();
-        } else if (vis && wasPlaying) {
-          wasPlaying = false;
-          state.playing = true;
-          morphPhase = state.morph;
-          last = performance.now();
-          syncUnrollUI();
-          schedule(['unroll']);
-        }
-      },
-      { threshold: 0.15 }
-    ).observe(unrollCanvas);
-  }
 
   // ── Boot ─────────────────────────────────────────────────────────────────
   document.querySelectorAll<HTMLElement>('[data-source]').forEach((b) => {
     b.classList.toggle('on', b.dataset.source === state.source);
   });
-  syncTwistUI();
-  syncUnrollUI();
-  if (!reduceMotion && unrollPlay) {
-    // Greet the reader with the unroll already in motion.
-    state.playing = true;
-    morphPhase = state.morph;
-    syncUnrollUI();
-  }
+  syncBendUI();
+  syncRollUI();
   new ResizeObserver(() => schedule()).observe(root);
   schedule();
 }

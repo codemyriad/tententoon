@@ -394,6 +394,127 @@
   }
   .analogy svg { display: block; width: 100%; height: auto; }
 
+  /* The three-step pipeline: log → bend → exp. Breaks out wider than the
+     text column on desktop; stacks to one column on narrow screens. */
+  .pipeline {
+    width: min(96vw, 1180px);
+    position: relative;
+    left: 50%;
+    transform: translateX(-50%);
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin: 1.8em 0 0.4em;
+  }
+  .pipeline .stage { display: flex; flex-direction: column; gap: 9px; margin: 0; }
+  .stagehead {
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink-2);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .stagehead .step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 21px;
+    height: 21px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .stagehead .step.in { background: var(--muted); font-size: 9.5px; letter-spacing: 0.02em; }
+  .stagehead .smath {
+    margin-left: auto;
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--accent-deep);
+    white-space: nowrap;
+  }
+  .stagehead .smath sup { font-size: 0.72em; }
+  .stagemath {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-style: italic;
+    font-size: 13.5px;
+    line-height: 1.3;
+    color: var(--ink-2);
+    min-height: 1.25em;
+    margin-top: -2px;
+  }
+  .stagemath em { font-style: italic; }
+  .stagemath sup { font-size: 0.72em; }
+  .stagemath .mv {
+    font-style: normal;
+    font-weight: 700;
+    color: var(--accent-deep);
+    font-variant-numeric: tabular-nums;
+  }
+  .pipeline .ctl-row { margin: 0; gap: 7px 12px; }
+  .pipeline .ctl input[type="range"] { width: 100%; min-width: 70px; max-width: none; }
+  .pipeline .ctl { flex: 1; }
+  .pipeline .seg { gap: 5px; }
+  .pipeline .seg button { padding: 4px 9px; font-size: 11.5px; }
+  .pipeline .ctl-row.src { margin-top: 1px; }
+
+  @media (max-width: 720px) {
+    .pipeline {
+      width: 100%;
+      left: auto;
+      transform: none;
+      grid-template-columns: 1fr;
+      gap: 26px;
+    }
+  }
+
+  /* Vendored video thumbnail → link out */
+  .videolink { margin: 1.4em auto 2em; max-width: 560px; }
+  .videolink a {
+    display: block;
+    position: relative;
+    border: 0;
+    border-radius: 9px;
+    overflow: hidden;
+    box-shadow: 0 14px 38px rgba(20, 14, 10, 0.2);
+  }
+  .videolink img { display: block; width: 100%; height: auto; }
+  .videolink .play {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: rgba(217, 79, 44, 0.92);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+    transition: transform 140ms, background 140ms;
+  }
+  .videolink .play::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 54%;
+    transform: translate(-50%, -50%);
+    border-style: solid;
+    border-width: 12px 0 12px 21px;
+    border-color: transparent transparent transparent #fff;
+  }
+  .videolink a:hover .play { transform: scale(1.08); background: var(--accent-deep); }
+  .videolink figcaption {
+    margin-top: 0.7em;
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 13.5px;
+    color: var(--muted);
+    text-align: center;
+  }
+
   .cta-row { margin: 2em 0 1em; }
   .cta {
     display: inline-block;
@@ -501,228 +622,241 @@
     </div>
   </header>
 
-  <h2>Start with something you've seen</h2>
+  <h2>Start with an ordinary photo</h2>
   <p>
-    Put a picture inside itself. Then put it inside <em>that</em> copy, and inside
-    the next, and don't stop.
+    Here is one: someone on a couch, holding an empty frame.
   </p>
 
   <figure class="fig-droste">
     <div class="frame">
-      <img src="/Droste_1260359-nevit.jpg" alt="A photograph of a person holding a picture frame; inside the frame is the same person holding the same frame, repeating into the distance." loading="lazy" />
+      <img src="/pre-droste-nevit.jpg" alt="A photograph of a person sitting on a couch, holding up an empty rectangular picture frame." loading="lazy" />
     </div>
-    <figcaption>
-      A real photograph: a frame, inside a frame, inside a frame. The effect
-      is named after a tin of Droste cocoa that pulled the same trick back in&nbsp;1904.
-    </figcaption>
+    <figcaption>Nothing unusual yet: a person, a couch, an empty frame.</figcaption>
   </figure>
 
   <p>
-    Every copy sits squarely inside the one before it. The picture drops
-    <em>straight down</em> into itself, shrinking by the same step each time,
-    forever. That is the <strong>Droste&nbsp;effect</strong>, and you've seen it a
-    hundred times: on the cocoa tin, in two facing mirrors, anywhere a thing holds
-    a smaller echo of itself.
+    Now do one thing to it. Take the whole photo &mdash; couch, smile, frame and
+    all &mdash; shrink it, and slot it into that empty frame. The frame isn't empty
+    now; it holds the photo. But the copy you just dropped in has a frame of its
+    own, and <em>that</em> one is empty. So fill it the same way. And the copy
+    inside it. There is no last step.
   </p>
 
-  <h2>Now bend it</h2>
-  <p>
-    Here's a stranger question. What if each copy doesn't only shrink &mdash; what
-    if it also <em>turns?</em>
-  </p>
-  <p>
-    Below is the same idea, a copy inside a copy inside a copy, except now every
-    copy is rotated a little as it shrinks. The whole stack winds up into a spiral.
-    <strong>Drag the twist</strong> from a flat Droste fall up to the angle where
-    the spiral seals shut.
-  </p>
-
-  <figure class="solo-panel live-panels">
-    <div class="panel-cell ar-img">
-      <span class="plabel">tententoon</span>
-      <canvas id="exp-escher"></canvas>
+  <figure class="fig-droste">
+    <div class="frame">
+      <img src="/Droste_1260359-nevit.jpg" alt="The same photograph, but now the frame holds a smaller copy of the whole photo, which holds a smaller copy again, repeating inward." loading="lazy" />
     </div>
-    <figcaption>The source, wound into a spiral. At the closing angle it meets itself with no seam &mdash; you could zoom in forever and never find the join.</figcaption>
+    <figcaption>The same photo, dropped into its own frame, again and again.</figcaption>
   </figure>
-  <div class="ctl-row">
-    <label class="ctl">twist&nbsp;<em>&beta;</em> <input type="range" id="exp-twist" aria-label="twist angle" /> <span class="val" id="exp-twist-val"></span></label>
-    <button type="button" class="btn" id="exp-twist-snap">snap it shut</button>
-    <span class="ctl-note" id="exp-twist-note"></span>
-  </div>
 
   <p>
-    At <em>0&deg;</em> it's the plain Droste, dropping straight in. Nudge the twist
-    up and watch the edges: straight lines bow into curves, the room leans over,
-    and still nothing tears. There is one special angle &mdash; the one marked
-    <em>closed&nbsp;&check;</em> &mdash; where every line, followed inward, comes
-    back to precisely where it began. Try <strong>snap it shut</strong> to land on
-    it exactly.
-  </p>
-
-  <div class="ctl-row">
-    <span class="seg" role="group" aria-label="what to bend">
-      <span class="seg-label">bend a</span>
-      <button type="button" data-source="polar" class="on">ring pattern</button>
-      <button type="button" data-source="grid">grid</button>
-      <button type="button" data-source="picture">photo</button>
-      <button type="button" data-source="overlay">overlay</button>
-    </span>
-  </div>
-  <p class="aside">
-    The <em>photo</em>'s own nesting is gentle, so its honest closing angle is only
-    about&nbsp;7&deg;. The clean test patterns repeat at <em>any</em> scale, so they
-    let us crank the twist all the way to ~25&deg; &mdash; almost exactly the
-    26&deg; Escher used.
+    That is the <strong>Droste&nbsp;effect</strong>, after the 1904 cocoa tin that
+    used it. Each copy sits squarely inside the last, the same shape a fixed
+    fraction smaller, and the picture falls straight toward its own centre &mdash;
+    with no bottom to reach.
   </p>
 
   <p class="pull">
-    Same picture. Two infinities. One drops straight down; the other takes the
-    scenic route, and <b>still arrives on time.</b>
+    That straight fall is one kind of infinity. Here is a second: let every copy
+    <b>turn</b> a little as it shrinks, and the stack winds into a spiral.
   </p>
 
-  <h2>How can a spiral be &ldquo;straight&rdquo;?</h2>
+  <h2>Bending it without breaking it</h2>
   <p>
-    That spiral looks impossibly complicated: curved, tightening, endless. Here is
-    the secret that tames it, and it needs no mathematics at all.
-  </p>
-  <p>
-    Picture a spiral staircase seen from straight above. It coils inward and seems
-    to fall away forever. But walk down it, and chart your <em>height</em> against
-    the <em>distance you've walked</em>. That chart is a plain, straight ramp. Same
-    staircase &mdash; one version rolled up, the other laid flat.
+    Bending the picture directly &mdash; curving every line by hand and praying the
+    ends still meet &mdash; is hopeless. So we take a detour in three moves:
+    <strong>flatten</strong> the nesting into a plain strip, <strong>lean</strong>
+    the strip over, then <strong>roll it back up</strong>. The three panels below
+    are those moves, wired together &mdash; move any control and the whole row
+    answers at once.
   </p>
 
-  <figure class="analogy">
-    <div class="board">
-      <svg viewBox="0 0 640 232" role="img" aria-label="Concentric rings on the left equal evenly spaced parallel lines on the right; unrolling turns circles into straight lines.">
-        <defs>
-          <marker id="ah" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M0,0 L10,5 L0,10 z" fill="#d94f2c" />
-          </marker>
-        </defs>
-        <g fill="none" stroke="#3a4a52" stroke-width="2">
-          <circle cx="140" cy="110" r="100" />
-          <circle cx="140" cy="110" r="71" />
-          <circle cx="140" cy="110" r="35" />
-          <circle cx="140" cy="110" r="24" />
-        </g>
-        <circle cx="140" cy="110" r="50" fill="none" stroke="#d1495b" stroke-width="3.5" />
-        <circle cx="140" cy="110" r="3.5" fill="#26424a" />
-        <text x="140" y="226" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="13" fill="#8c8474">rings around the centre</text>
-
-        <text x="320" y="84" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-style="italic" font-size="15" fill="#a83a1d">unroll</text>
-        <path d="M268,110 C298,92 330,92 360,110" fill="none" stroke="#d94f2c" stroke-width="2.5" marker-end="url(#ah)" />
-
-        <g stroke="#3a4a52" stroke-width="2" stroke-linecap="round">
-          <line x1="392" y1="50" x2="610" y2="50" />
-          <line x1="392" y1="80" x2="610" y2="80" />
-          <line x1="392" y1="140" x2="610" y2="140" />
-          <line x1="392" y1="170" x2="610" y2="170" />
-        </g>
-        <line x1="392" y1="110" x2="610" y2="110" stroke="#d1495b" stroke-width="3.5" stroke-linecap="round" />
-        <text x="501" y="226" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="13" fill="#8c8474">the same rings, laid flat</text>
-      </svg>
-    </div>
-    <figcaption>
-      Rings around a centre (left) are the very same thing as evenly&nbsp;spaced
-      lines laid flat (right). Unrolling turns circles into straight lines &mdash;
-      and it turns our spiral into something boringly regular.
-    </figcaption>
-  </figure>
-
-  <h2>Unroll the spiral yourself</h2>
-  <p>
-    So let's do exactly that to the spiral above: unroll it. Slide the control, or
-    press play, and watch the tightening coil straighten into a flat, repeating
-    strip.
-  </p>
-
-  <figure class="solo-panel live-panels">
-    <div class="panel-cell ar-img">
-      <span class="plabel">spiral &harr; strip</span>
-      <canvas id="exp-unroll"></canvas>
-    </div>
-    <figcaption>The same image, mid-unroll. Rolled up it's the tententoon; laid flat it's a plain pattern that just repeats, sideways and upward, forever.</figcaption>
-  </figure>
-  <div class="ctl-row">
-    <label class="ctl">rolled&nbsp;up <input type="range" id="exp-unroll-range" aria-label="unroll amount" /> flat</label>
-    <button type="button" class="btn" id="exp-unroll-play">&#9654; play</button>
-    <span class="ctl-note" id="exp-unroll-val"></span>
-  </div>
-
-  <p>
-    Laid flat, the mystery is gone. There's no centre to fall into and no curve to
-    tear &mdash; just one tile, copied over and over without end. That flattening
-    move has a name you may remember from school: the <strong>logarithm</strong>.
-    It measures things not by <em>how big</em> but by <em>how many times you've
-    multiplied</em> &mdash; so shrinking by the same step, again and again, turns
-    into plain, even spacing. Every spiral in this whole story is just a strip,
-    rolled&nbsp;up.
-  </p>
-
-  <h2>Slide the strip, spin the picture</h2>
-  <p>
-    Now that it's flat, play with it. The panel on the left is the unrolled strip
-    itself; mathematicians write it <strong>log(z&nbsp;&minus;&nbsp;c)</strong>.
-    <strong>Drag it.</strong>
-  </p>
-
-  <figure class="experiment live-panels" aria-label="Drag the log panel to zoom and rotate the picture">
-    <div class="exp-pair">
+  <figure class="pipeline live-panels" aria-label="The original picture, then three connected transforms: the flat log strip, the strip leaned over, and the strip rolled back up into a spiral.">
+    <div class="stage">
+      <div class="stagehead"><span class="step in">in</span> the original</div>
+      <div class="stagemath">shrink&nbsp;<em>S</em> = <b class="mv" id="m-s">2.1</b></div>
       <div class="panel-cell ar-img">
-        <span class="plabel">log(z &minus; c) <span class="pchip">drag me</span></span>
-        <canvas id="exp-log"></canvas>
-        <span class="draghint">&harr; zoom&nbsp;&nbsp;&updownarrow; spin</span>
-      </div>
-      <div class="panel-cell ar-img">
-        <span class="plabel">the picture</span>
+        <span class="plabel">source</span>
         <canvas id="exp-orig"></canvas>
+      </div>
+      <div class="ctl-row src">
+        <span class="seg" role="group" aria-label="what to feed in">
+          <button type="button" data-source="polar">ring</button>
+          <button type="button" data-source="grid">grid</button>
+          <button type="button" data-source="picture">photo</button>
+          <button type="button" data-source="overlay" class="on">overlay</button>
+        </span>
+      </div>
+    </div>
+    <div class="stage">
+      <div class="stagehead"><span class="step">1</span> we log it</div>
+      <div class="stagemath"><em>&zeta;</em> = log(<em>z</em>&nbsp;&minus;&nbsp;<em>c</em>) &nbsp;&middot;&nbsp; log&nbsp;<em>S</em> = <b class="mv" id="m-logs">0.75</b></div>
+      <div class="panel-cell ar-img">
+        <span class="plabel">flat strip <span class="pchip">drag me</span></span>
+        <canvas id="exp-log"></canvas>
+        <span class="draghint">&harr; zoom&nbsp;&nbsp;&updownarrow; turn</span>
+      </div>
+      <div class="ctl-row src">
+        <span class="seg" role="group" aria-label="what to feed in">
+          <button type="button" data-source="polar">ring</button>
+          <button type="button" data-source="grid">grid</button>
+          <button type="button" data-source="picture">photo</button>
+          <button type="button" data-source="overlay" class="on">overlay</button>
+        </span>
+      </div>
+    </div>
+    <div class="stage">
+      <div class="stagehead"><span class="step">2</span> we bend it</div>
+      <div class="stagemath"><em>&zeta;</em> &rarr; <em>&alpha;&zeta;</em>,&nbsp; <em>&alpha;</em> = 1 &minus; <b class="mv" id="m-k">0.12</b>&#8202;<em>i</em></div>
+      <div class="panel-cell ar-img is-closed">
+        <span class="plabel">leaned over</span>
+        <canvas id="exp-bend"></canvas>
+      </div>
+      <div class="ctl-row">
+        <label class="ctl">lean <input type="range" id="exp-bend-range" aria-label="lean angle" /> <span class="val" id="exp-bend-val"></span></label>
+        <button type="button" class="btn" id="exp-bend-snap">snap</button>
+      </div>
+      <div class="ctl-row"><span class="ctl-note" id="exp-bend-note"></span></div>
+      <div class="ctl-row src">
+        <span class="seg" role="group" aria-label="what to feed in">
+          <button type="button" data-source="polar">ring</button>
+          <button type="button" data-source="grid">grid</button>
+          <button type="button" data-source="picture">photo</button>
+          <button type="button" data-source="overlay" class="on">overlay</button>
+        </span>
+      </div>
+    </div>
+    <div class="stage">
+      <div class="stagehead"><span class="step">3</span> we exponentiate it</div>
+      <div class="stagemath"><em>w</em> = <em>c</em> + (<em>z</em>&nbsp;&minus;&nbsp;<em>c</em>)<sup><em>&alpha;</em></sup></div>
+      <div class="panel-cell ar-img is-closed">
+        <span class="plabel">rolled up</span>
+        <canvas id="exp-exp"></canvas>
+      </div>
+      <div class="ctl-row">
+        <label class="ctl">flat <input type="range" id="exp-roll" aria-label="roll up into the spiral" /> spiral</label>
+      </div>
+      <div class="ctl-row src">
+        <span class="seg" role="group" aria-label="what to feed in">
+          <button type="button" data-source="polar">ring</button>
+          <button type="button" data-source="grid">grid</button>
+          <button type="button" data-source="picture">photo</button>
+          <button type="button" data-source="overlay" class="on">overlay</button>
+        </span>
       </div>
     </div>
   </figure>
   <div class="exp-controls">
-    <span class="readout" id="exp-readout">drag the log: &harr; zooms the picture, &updownarrow; spins it</span>
+    <span class="readout" id="exp-readout">drag the flat strip: &harr; zooms everything, &updownarrow; turns it</span>
     <button type="button" class="btn" id="exp-reset">reset</button>
   </div>
   <p class="exp-fallback" id="exp-fallback" hidden>
-    This live experiment needs WebGL2 and JavaScript. In short: a sideways slide in
-    the flat log strip zooms the picture, and an up-and-down slide spins it.
+    This live pipeline needs WebGL2 and JavaScript. In short: flatten the nested
+    frames into a repeating strip, lean the strip to the angle where its tiles
+    still line up, and roll it back up &mdash; the lean becomes the spiral.
+  </p>
+  <p class="aside">
+    The <em>photo</em>'s own nesting is gentle, so it closes at only about&nbsp;7&deg;.
+    The <em>ring</em> and <em>grid</em> patterns repeat at every scale, so they
+    close at the full ~25&deg; &mdash; almost exactly the 26&deg; Escher used. The
+    source choice under each panel is shared across all three.
   </p>
 
+  <h2>1 &middot; We log it</h2>
   <p>
-    A sideways drag <em>zooms</em> the picture; an up-and-down drag <em>spins</em>
-    it. There's the whole trick in one sentence: <strong>a plain slide in the flat
-    world is a zoom-and-turn in the round one.</strong> Slide by exactly one tile
-    and the picture lands back on itself, identical. Roll the strip up again, and
-    &ldquo;slide by one tile&rdquo; becomes &ldquo;go once around the spiral.&rdquo;
-    The loop closes because the slide closes. The seam isn't hidden; there simply
-    isn't one.
+    Start with the turning. A ring around the centre has no end: travel round it,
+    return to your mark, set off again, as many laps as you please. Lay that trip
+    out straight and it's a line on which one lap repeats, then an identical lap,
+    then another. Going around always brings you home &mdash; so flattened, the
+    picture is <em>periodic</em>: shift it by one lap and nothing has changed.
   </p>
 
-  <h2>For the curious: the actual map</h2>
+  <figure class="analogy">
+    <div class="board">
+      <svg viewBox="0 0 640 190" role="img" aria-label="A single ring unrolls into a line that repeats: the same point returns after every lap, evenly spaced along the line with no end.">
+        <defs>
+          <marker id="ah2" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#d94f2c" />
+          </marker>
+        </defs>
+        <circle cx="104" cy="86" r="62" fill="none" stroke="#3a4a52" stroke-width="2" />
+        <path d="M104,24 A62,62 0 0 1 160,55" fill="none" stroke="#d94f2c" stroke-width="2.5" marker-end="url(#ah2)" />
+        <circle cx="104" cy="24" r="4.5" fill="#d1495b" />
+        <text x="104" y="180" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="13" fill="#8c8474">one trip around</text>
+
+        <text x="223" y="72" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-style="italic" font-size="15" fill="#a83a1d">unroll</text>
+        <path d="M196,86 C216,70 236,70 256,86" fill="none" stroke="#d94f2c" stroke-width="2.5" marker-end="url(#ah2)" />
+
+        <text x="268" y="91" text-anchor="end" font-family="Inter, system-ui, sans-serif" font-size="16" fill="#b9b1a0">&hellip;</text>
+        <line x1="278" y1="86" x2="616" y2="86" stroke="#3a4a52" stroke-width="2" />
+        <line x1="362" y1="86" x2="430" y2="86" stroke="#d1495b" stroke-width="4" stroke-linecap="round" />
+        <g fill="#d1495b">
+          <circle cx="294" cy="86" r="4.5" />
+          <circle cx="362" cy="86" r="4.5" />
+          <circle cx="430" cy="86" r="4.5" />
+          <circle cx="498" cy="86" r="4.5" />
+          <circle cx="566" cy="86" r="4.5" />
+        </g>
+        <text x="396" y="72" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="12.5" fill="#a83a1d">one lap</text>
+        <text x="628" y="91" text-anchor="start" font-family="Inter, system-ui, sans-serif" font-size="16" fill="#b9b1a0">&hellip;</text>
+        <text x="447" y="180" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="13" fill="#8c8474">the same point returns every lap</text>
+      </svg>
+    </div>
+    <figcaption>
+      A ring has no end, so unrolling it gives a line that repeats: the same point
+      comes back every lap. That is the periodic strip in the first panel, read
+      along its short way.
+    </figcaption>
+  </figure>
+
   <p>
-    Everything above is a single idea with the arithmetic filled in. Measure each
-    point by its distance from the centre <em>c</em> and its angle; take the
-    logarithm of the distance. The endless nested frames flatten into a rectangular
-    <em>lattice</em> &mdash; step sideways by <em>log&nbsp;S</em> for one Droste
-    jump, up by <em>2&pi;</em> for one full turn around <em>c</em>.
+    Going inward usually breaks the spell &mdash; zoom toward the middle of a photo
+    and you meet new detail forever, never the same view twice. The Droste is the
+    exception, and we built it on purpose: one frame inward is an exact copy of the
+    whole, so inward repeats as well. Flatten both directions and the picture turns
+    into a plain grid of identical tiles. (The flattening trades a point's distance
+    from the centre for the number of shrink-steps that reach it, so repeated
+    multiplying becomes repeated adding. Its name is the <strong>logarithm</strong>.)
   </p>
   <p>
-    A copy that shrinks <em>and</em> turns leans that lattice over by a fixed angle,
-    <em>&beta;&nbsp;=&nbsp;arctan(log&nbsp;S&nbsp;/&nbsp;2&pi;)</em>: the one tilt
-    that lets the pattern line back up with itself after a slide. (Drag the twist
-    near the top to <em>closed&nbsp;&check;</em> and you have set exactly this
-    <em>&beta;</em>; the unroll panel is that same leaned-over lattice.) Roll the
-    logarithm back up and the tilted lattice winds into the spiral, caught in a
-    single line:
+    This is the quiet fact the whole spiral rests on: in that grid, <strong>a step
+    of exactly one tile lands you on a region identical to where you started.</strong>
+    Drag the flat strip and feel it &mdash; a sideways slide zooms, an up-and-down
+    slide turns, and after one full tile everything is precisely as it was.
   </p>
-  <p class="formula">
-    <em>w(z) = c + (z &minus; c)<sup>&alpha;</sup></em>,&emsp;
-    <em>&alpha; = 1 &minus; i&middot;(log&nbsp;S&nbsp;/&nbsp;2&pi;)</em>.
+
+  <h2>2 &middot; We bend it</h2>
+  <p>
+    Bending a spiral by hand is hopeless; leaning a flat grid is easy. Push the
+    <strong>lean</strong> slider on the middle panel and the strip tilts. Most
+    angles drag the tiles out of step, but at one the rows click back into
+    register &mdash; every tile still meets its neighbours, no gaps, no overlaps.
+    That angle is the one marked <em>closed&nbsp;&check;</em>; <strong>snap</strong>
+    lands on it exactly.
   </p>
   <p>
-    The real part carries the picture; the imaginary part is the lean. That &mdash;
-    all of it &mdash; is the tententoon.
+    Here's why any lean can work. The grid repeats one step over <em>and</em> one
+    step up, so it also repeats along a staircase built from those two steps. Lean
+    the strip along such a staircase and it still lies on top of itself. Only that
+    family of angles keeps the tiles aligned, and the shallowest of them is the one
+    that will close the spiral.
+  </p>
+
+  <h2>3 &middot; We exponentiate it</h2>
+  <p>
+    One move remains: roll the leaned strip back up &mdash; the exact reverse of
+    flattening it. Press <strong>roll it up</strong> on the third panel and the
+    strip winds around the centre; the lean becomes a turn, and the grid of tiles
+    closes into the spiral. Because we only ever leaned a pattern that repeats, the
+    spiral meets itself with no seam &mdash; follow any line inward and it returns
+    to where it began. That is the <strong>tententoon</strong>.
+  </p>
+  <p>
+    Rolling up is the undo of logging: where one counted shrink-steps to flatten
+    the picture, the other grows them back. Both infinities live at its two ends
+    &mdash; leave the strip upright and it rolls into the straight Droste fall; lean
+    it first and it rolls into Escher's spiral. Same picture, same roll &mdash; only
+    the lean is different.
   </p>
 
   <h2>Escher got there first, by hand</h2>
@@ -749,19 +883,24 @@
     picture is forced, including the part Escher left blank.
   </p>
   <p>
-    This is not a theorem so much as a recipe: with the map in hand, you can hand
-    the missing centre to a computer and have it do what a pen could not. That is
-    exactly what they did, continuing the spiral inward far past the reach of any
-    hand and closing the white hole at last.
+    With the exact map written down, the blank centre is no longer a place a hand
+    has to reach: it can be computed. So they did &mdash; continuing the spiral
+    inward, far past any pen, and closing the white hole at last.
   </p>
 
   <h2>See it move</h2>
   <p>
-    If you'd like the whole argument in motion, <strong>Grant Sanderson</strong>
-    (of <em>3Blue1Brown</em>) made a beautiful animated tour of the paper in 2026.
-    It is the clearest walk through the mathematics there is:
-    <a href="https://www.youtube.com/watch?v=ldxFjLJ3rVY" target="_blank" rel="noopener noreferrer">watch it here</a>.
+    If you'd like the whole argument animated, <strong>Grant Sanderson</strong>
+    (of <em>3Blue1Brown</em>) made a tour of the de&nbsp;Smit&ndash;Lenstra paper in
+    2026 &mdash; the very <em>log(Escher)</em> step you just played with, and more.
   </p>
+  <figure class="videolink">
+    <a href="https://www.youtube.com/watch?v=ldxFjLJ3rVY" target="_blank" rel="noopener noreferrer" aria-label="Watch the 3Blue1Brown video on YouTube">
+      <img src="/3b1b-print-gallery.jpg" alt="Video thumbnail: Escher's Print Gallery beside its logarithm, captioned Escher → log(Escher)." loading="lazy" />
+      <span class="play" aria-hidden="true"></span>
+    </a>
+    <figcaption>3Blue1Brown on Escher's <em>Print Gallery</em> &mdash; watch on YouTube.</figcaption>
+  </figure>
 
   <h2>Now make one</h2>
   <p>
