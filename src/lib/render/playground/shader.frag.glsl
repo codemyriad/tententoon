@@ -38,6 +38,7 @@ vec2 clog(vec2 z) { return vec2(0.5 * log(dot(z, z) + 1e-30), atan(z.y, z.x)); }
 vec2 cpow(vec2 z, vec2 w) { if (dot(z, z) < 1e-20) return vec2(0.0); return cexp(cmul(w, clog(z))); }
 vec2 csinz(vec2 z) { return vec2(sin(z.x) * cosh(z.y), cos(z.x) * sinh(z.y)); }
 vec2 ccosz(vec2 z) { return vec2(cos(z.x) * cosh(z.y), -sin(z.x) * sinh(z.y)); }
+vec2 ctanz(vec2 z) { return cdiv(csinz(z), ccosz(z)); }
 
 const vec2 ONE = vec2(1.0, 0.0);
 
@@ -58,7 +59,7 @@ void evalF(vec2 z, out vec2 fOut, out float dOut) {
   } else if (u_mode == 4) {     // Möbius k(z−z0)/(z−zi)
     vec2 den = z - u_pc;
     f = cmul(u_pa, cdiv(z - u_pb, den));
-    d = cmul(u_pa, cdiv(u_pc - u_pb, cmul(den, den)));
+    d = cmul(u_pa, cdiv(u_pb - u_pc, cmul(den, den)));
   } else if (u_mode == 5) {     // Joukowski ½(z + 1/z)
     f = 0.5 * (z + cdiv(ONE, z));
     d = 0.5 * (ONE - cdiv(ONE, cmul(z, z)));
@@ -70,8 +71,17 @@ void evalF(vec2 z, out vec2 fOut, out float dOut) {
     vec2 a = vec2(1.0, -u_pr.x);
     f = cpow(z, a);
     d = cmul(a, cpow(z, a - ONE));
-  } else {                      // sine
+  } else if (u_mode == 9) {     // sine
     f = csinz(z); d = ccosz(z);
+  } else if (u_mode == 10) {    // tan
+    f = ctanz(z);
+    d = cdiv(ONE, cmul(ccosz(z), ccosz(z)));
+  } else if (u_mode == 11) {    // sin(1/z)
+    vec2 inv = cdiv(ONE, z);
+    f = csinz(inv);
+    d = cmul(ccosz(inv), cdiv(vec2(-1.0, 0.0), cmul(z, z)));
+  } else {
+    f = z; d = ONE;
   }
   fOut = f;
   dOut = length(d);

@@ -59,6 +59,13 @@ describe('playground presets — f(z) correctness (CPU mirror of the shader)', (
     near(p.f(cx(2, 3), { k: 0 }), 2, 3);
   });
   it('sine: f(π/2) = 1', () => near(evalF('sine', cx(Math.PI / 2, 0)), 1, 0));
+  it('tan: f(0) = 0', () => near(evalF('tan', cx(0, 0)), 0, 0));
+  it('sin(1/z): f(2/π) = sin(π/2) = 1', () => near(evalF('sininv', cx(2 / Math.PI, 0)), 1, 0));
+
+  it("mobius f' sign: f'(0) = k(z0−z∞)/(z−z∞)² = -5 for defaults", () => {
+    const m = P('mobius');
+    near(m.fp(cx(0, 0), defaultParams(m)), -5, 0);
+  });
 });
 
 describe('playground presets — live formula text', () => {
@@ -80,5 +87,11 @@ describe('playground presets — live formula text', () => {
 
   it('escher shows its exponent a = 1 − ki', () => {
     expect(formulaText(P('escher'), { k: 0.3 }, cx(0, 0), 'output')).toBe('f(z) = z^(1 − 0.3i)');
+  });
+
+  it('new presets render their notation', () => {
+    expect(formulaText(P('tan'), {}, cx(0, 0), 'output')).toBe('f(z) = tan(z)');
+    expect(formulaText(P('sininv'), {}, cx(0, 0), 'output')).toBe('f(z) = sin(1 / z)');
+    expect(formulaText(P('sininv'), {}, cx(0.5, 0), 'domain')).toBe('f(z) = sin(1 / (z + 0.5))');
   });
 });

@@ -195,8 +195,9 @@ export const PRESETS: Preset[] = [
     ],
     f: (z, p) => cmul(k(p, 'k'), cdiv(csub(z, k(p, 'z0')), csub(z, k(p, 'zi')))),
     fp: (z, p) => {
+      // d/dz [k(z−z0)/(z−z∞)] = k(z0−z∞)/(z−z∞)²
       const d = csub(z, k(p, 'zi'));
-      return cmul(k(p, 'k'), cdiv(csub(k(p, 'zi'), k(p, 'z0')), cmul(d, d)));
+      return cmul(k(p, 'k'), cdiv(csub(k(p, 'z0'), k(p, 'zi')), cmul(d, d)));
     },
     uniforms: (p) => ({ pr: [0, 0, 0, 0], pa: u2(k(p, 'k')), pb: u2(k(p, 'z0')), pc: u2(k(p, 'zi')) }),
     expr: (a, p, compound) => {
@@ -261,6 +262,29 @@ export const PRESETS: Preset[] = [
     fp: (z) => ccos(z),
     uniforms: () => NO_U,
     expr: (a) => `sin(${a})`
+  },
+  {
+    id: 'tan',
+    mode: 10,
+    label: 'Tangent',
+    params: [],
+    f: (z) => cdiv(csin(z), ccos(z)),
+    fp: (z) => cdiv(ONE, cmul(ccos(z), ccos(z))), // sec²z
+    uniforms: () => NO_U,
+    expr: (a) => `tan(${a})`
+  },
+  {
+    id: 'sininv',
+    mode: 11,
+    label: 'sin(1/z)',
+    params: [],
+    f: (z) => csin(cdiv(ONE, z)),
+    fp: (z) => {
+      const inv = cdiv(ONE, z);
+      return cmul(ccos(inv), cdiv(cx(-1), cmul(z, z))); // cos(1/z)·(−1/z²)
+    },
+    uniforms: () => NO_U,
+    expr: (a) => `sin(1 / ${par(a, a !== 'z')})`
   }
 ];
 
