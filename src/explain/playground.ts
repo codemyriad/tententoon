@@ -147,8 +147,9 @@ export function initPlayground(): void {
   let cw = 0;
   let ch = 0;
   function resize(): void {
-    const dpr = window.devicePixelRatio || 1;
     const rect = inCanvas.getBoundingClientRect();
+    if (!rect || rect.width === 0) return; // not laid out yet; ResizeObserver retries
+    const dpr = window.devicePixelRatio || 1;
     const px = Math.max(1, Math.round(rect.width * dpr));
     cw = px;
     ch = px;
@@ -389,7 +390,10 @@ export function initPlayground(): void {
   }
 
   function draw(): void {
-    if (cw === 0) resize();
+    if (cw === 0) {
+      resize();
+      if (cw === 0) return; // still not laid out; wait for ResizeObserver
+    }
     drawSide(ictx, toIn, false);
     drawSide(octx, toOut, true);
     updateReadout();
@@ -484,8 +488,13 @@ export function initPlayground(): void {
 
   // ── boot ──────────────────────────────────────────────────────────────────
   document.querySelectorAll<HTMLElement>('.pg-fn').forEach((b) => b.classList.toggle('on', b.dataset.fn === state.fn.key));
-  setLayer('grid', state.grid);
-  resize();
-  draw();
+  // ResizeObserver fires once on observe, which lays the first frame down after
+  // layout exists — so a module that evaluates before CSS is applied still draws.
   new ResizeObserver(() => { resize(); draw(); }).observe(root);
+  // And one deferred pass in case the observer is slow on the very first paint.
+  requestAnimationFrame(() => {
+    setLayer('grid', state.grid);
+    resize();
+    draw();
+  });
 }
