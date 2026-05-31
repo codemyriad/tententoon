@@ -35,7 +35,13 @@ type FnKey = 'id' | 'double' | 'rot' | 'square' | 'exp' | 'log';
 // not a uniform scale, and they need the extra room to stay framed.
 type Fn = { key: FnKey; label: string; map: (z: C) => C; fixedOut?: number };
 
-const D = 2.4; // input half-extent: the plane shown is [−D, D]²
+// Input half-extent: the plane shown is [−D, D]². Chosen as π so the vertical
+// span is exactly 2π — exp(z) maps the imaginary part to the output angle, so
+// only a 2π-tall strip rolls the full way around the origin into closed circles.
+// Anything smaller leaves the exp rings visibly open (a height of h wraps just
+// h/2π of the lap). This 2π periodicity is the same one that closes the
+// tententoon spiral.
+const D = Math.PI;
 
 const FNS: Fn[] = [
   { key: 'id', label: 'f(z) = z', map: (z) => ({ re: z.re, im: z.im }), fixedOut: D },
@@ -59,7 +65,7 @@ const FNS: Fn[] = [
 ];
 
 const PHOTO = '/Droste_1260359-nevit.jpg';
-const GRID_STEP = 0.4;
+const GRID_STEP = Math.PI / 8; // ≈0.393; divides D = π evenly, no edge sliver
 const NEIGH = 0.17; // half-side of the little square drawn around the dragged point
 const LINE_SAMPLES = 100;
 const MESH = 22; // triangle-mesh resolution for the photo warp
