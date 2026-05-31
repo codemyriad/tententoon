@@ -50,11 +50,20 @@ export function resetPlayground(): void {
   playground.zoom = 1;
 }
 
-/** True when anything is off the current preset's defaults. */
+/** True when anything is off the current preset's defaults — zoom, pan, OR
+ *  any parameter (a slider nudge or a dragged Möbius zero/pole counts). */
 export function playgroundDirty(): boolean {
-  return (
-    playground.zoom !== 1 ||
-    playground.c.re !== 0 ||
-    playground.c.im !== 0
-  );
+  if (playground.zoom !== 1 || playground.c.re !== 0 || playground.c.im !== 0) return true;
+  const defs = defaultParams(PRESET_BY_ID[playground.presetId]);
+  for (const id in defs) {
+    const cur = playground.params[id];
+    const def = defs[id];
+    if (typeof def === 'number') {
+      if (cur !== def) return true;
+    } else {
+      const c = cur as Complex;
+      if (c.re !== def.re || c.im !== def.im) return true;
+    }
+  }
+  return false;
 }

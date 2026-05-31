@@ -32,6 +32,10 @@
   let viewW = $state(0);
   let viewH = $state(0);
   let glRenderer = $state<PlaygroundGLRenderer | null>(null);
+  // WebGL2 was advertised by detectCapabilities but init threw anyway (shader
+  // link / context allocation). Flip to the CPU path instead of rendering
+  // nothing forever.
+  let glInitFailed = $state(false);
 
   const active = $derived(ui.view === 'playground');
   const preset = $derived(PRESET_BY_ID[playground.presetId]);
@@ -101,9 +105,11 @@
       r = new PlaygroundGLRenderer();
       r.init(canvas);
       glRenderer = r;
+      glInitFailed = false;
     } catch {
       r?.dispose();
       glRenderer = null;
+      glInitFailed = true; // fall through to the CPU path
     }
     return () => {
       r?.dispose();
@@ -124,7 +130,10 @@
   // effect re-runs on any change (mirrors PipelinePanel's tracking note).
   $effect(() => {
     if (!active || !canvas || !fit || !doc.image || !preset) return;
-    if (useGL && !glRenderer) return;
+    // Use GL only if it's available AND actually initialized. If init failed,
+    // tryGL is false and we render through the CPU path below.
+    const tryGL = useGL && !glInitFailed;
+    if (tryGL && !glRenderer) return; // still bringing the renderer up
     const f = fit;
     const dpr = window.devicePixelRatio || 1;
     let cw = Math.max(1, Math.round(f.w * dpr));
@@ -146,7 +155,7 @@
     const params = playground.params;
 
     const raf = requestAnimationFrame(() => {
-      if (useGL && glRenderer) {
+      if (tryGL && glRenderer) {
         glRenderer.render({
           pixels, mode, W: cw, H: ch, imgAspect: aspect, zoom,
           c, panMode: panMode === 'domain' ? 0 : 1, uniforms, fill
