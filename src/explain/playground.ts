@@ -26,13 +26,22 @@
 type C = { re: number; im: number };
 
 type FnKey = 'id' | 'double' | 'rot' | 'square' | 'exp' | 'log';
-type Fn = { key: FnKey; label: string; map: (z: C) => C };
+// `fixedOut`, when set, pins the output plane to that half-extent instead of
+// auto-fitting. The linear maps MUST share the input scale (D): if the output
+// viewport auto-grew to fit 2z, the doubling would be cancelled by the zoom and
+// the grid would look untouched. Pinning to D makes "everything doubled" read as
+// a visibly coarser grid and a point flung outward. Nonlinear maps (z², exp,
+// log) leave it unset and auto-fit — for them the lesson is the *shape* change,
+// not a uniform scale, and they need the extra room to stay framed.
+type Fn = { key: FnKey; label: string; map: (z: C) => C; fixedOut?: number };
+
+const D = 2.4; // input half-extent: the plane shown is [−D, D]²
 
 const FNS: Fn[] = [
-  { key: 'id', label: 'f(z) = z', map: (z) => ({ re: z.re, im: z.im }) },
-  { key: 'double', label: 'f(z) = 2z', map: (z) => ({ re: 2 * z.re, im: 2 * z.im }) },
+  { key: 'id', label: 'f(z) = z', map: (z) => ({ re: z.re, im: z.im }), fixedOut: D },
+  { key: 'double', label: 'f(z) = 2z', map: (z) => ({ re: 2 * z.re, im: 2 * z.im }), fixedOut: D },
   // i·z = i(x + iy) = −y + ix : a quarter-turn.
-  { key: 'rot', label: 'f(z) = iz', map: (z) => ({ re: -z.im, im: z.re }) },
+  { key: 'rot', label: 'f(z) = iz', map: (z) => ({ re: -z.im, im: z.re }), fixedOut: D },
   { key: 'square', label: 'f(z) = z²', map: (z) => ({ re: z.re * z.re - z.im * z.im, im: 2 * z.re * z.im }) },
   {
     key: 'exp',
@@ -50,7 +59,6 @@ const FNS: Fn[] = [
 ];
 
 const PHOTO = '/Droste_1260359-nevit.jpg';
-const D = 2.4; // input half-extent: the plane shown is [−D, D]²
 const GRID_STEP = 0.4;
 const NEIGH = 0.17; // half-side of the little square drawn around the dragged point
 const LINE_SAMPLES = 100;
@@ -127,6 +135,7 @@ export function initPlayground(): void {
   // scrubbing so the frame doesn't lurch under the reader.
   let outE = D;
   function computeOutExtent(): void {
+    if (state.fn.fixedOut !== undefined) { outE = state.fn.fixedOut; return; }
     let m = D * 0.5;
     const N = 24;
     for (let i = 0; i <= N; i++) {
