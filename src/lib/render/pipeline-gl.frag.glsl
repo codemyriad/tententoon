@@ -144,7 +144,10 @@ void main() {
     float s = exp(n * u_logS);
     vec2 tcoord = u_c + sd * s;
     vec2 e = abs(tcoord - eRad) / eRad;
-    float gauge = mix(length(e), max(e.x, e.y), u_shapeMorph);
+    float mGauge = (u_mode == 2 && n <= 0.0)
+      ? mix(1.0, u_shapeMorph, clamp(abs(u_kTwist) / 0.05, 0.0, 1.0))
+      : u_shapeMorph;
+    float gauge = mix(length(e), max(e.x, e.y), mGauge);
     if (gauge <= 1.0) {
       float footprint = footA * s;
       float lod = max(0.0, log2(footprint));

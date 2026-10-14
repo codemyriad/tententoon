@@ -144,6 +144,8 @@ export default defineConfig({
         // Each is a standalone page over src/experiments/kit.ts; they ship
         // to dist/experiments/*.html, reachable but not referenced by the app.
         experiments: resolve(process.cwd(), 'experiments/index.html'),
+        exp_home_triptych: resolve(process.cwd(), 'experiments/home-triptych.html'),
+        exp_home_workbench: resolve(process.cwd(), 'experiments/home-workbench.html'),
         exp_zen: resolve(process.cwd(), 'experiments/zen.html'),
         exp_steps: resolve(process.cwd(), 'experiments/steps.html'),
         exp_lens: resolve(process.cwd(), 'experiments/lens.html'),
@@ -155,7 +157,10 @@ export default defineConfig({
         experiments_2: resolve(process.cwd(), 'experiments-2/index.html'),
         exp2_essay: resolve(process.cwd(), 'experiments-2/essay.html'),
         exp2_inside: resolve(process.cwd(), 'experiments-2/inside.html'),
-        exp2_play: resolve(process.cwd(), 'experiments-2/play.html')
+        exp2_play: resolve(process.cwd(), 'experiments-2/play.html'),
+        experiments_3: resolve(process.cwd(), 'experiments-3/index.html'),
+        exp3_home_triptych: resolve(process.cwd(), 'experiments-3/home-triptych.html'),
+        exp3_home_workbench: resolve(process.cwd(), 'experiments-3/home-workbench.html')
       }
     }
   },

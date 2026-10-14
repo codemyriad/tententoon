@@ -3,18 +3,12 @@
  *
  * Four modes feed the same pipeline so you can watch the Droste→Escher map act
  * on different things:
- *   picture  — the test photograph.
+ *   picture  — the selected contest photograph.
  *   grid     — a cartesian grid centred on the limit point c.
- *   polar    — concentric circles + spokes centred on c. Each circle has its
- *              own style (thick / dashed / plain, in ink then red) so you can
- *              follow an individual ring through the transform; in the log
- *              panel a circle becomes a vertical line.
+ *   polar    — concentric circles + spokes centred on c, anchored to the
+ *              portal radius so the thick primary ring lands right on the
+ *              portal rim and repeats once every Droste period (×S).
  *   overlay  — the photograph with the grid and polar drawn on top.
- *
- * Patterns are drawn at the photo's pixel size, centred on c (image coords),
- * and the rings are spaced by S^(1/6) so the style cycle repeats exactly once
- * per Droste period — i.e. the pattern is invariant under scaling by S about
- * c, the same self-similarity the photo has, so the fold stays seamless.
  */
 
 export type SourceMode = 'picture' | 'grid' | 'polar' | 'overlay';
@@ -29,12 +23,12 @@ function ringStyle(n: number, overlay: boolean): RingStyle {
   const ink = overlay ? 'rgba(255,255,255,0.92)' : INK;
   const red = overlay ? '#ff6b7a' : RED;
   const cycle: RingStyle[] = [
-    { width: 5, dash: [], color: ink }, //        thick
-    { width: 2.5, dash: [11, 9], color: ink }, //  dashed
-    { width: 2.5, dash: [], color: ink }, //       plain
-    { width: 5, dash: [], color: red }, //         thick red
-    { width: 2.5, dash: [11, 9], color: red }, //  dashed red
-    { width: 2.5, dash: [], color: red } //        plain red
+    { width: 5, dash: [], color: red }, //          thick red (lands on portal rim)
+    { width: 2.5, dash: [11, 9], color: ink }, //   dashed
+    { width: 2.5, dash: [], color: ink }, //        plain
+    { width: 4.5, dash: [], color: ink }, //        thick ink (half-period)
+    { width: 2.5, dash: [11, 9], color: red }, //   dashed red
+    { width: 2.5, dash: [], color: red } //         plain red
   ];
   return cycle[((n % RINGS_PER_PERIOD) + RINGS_PER_PERIOD) % RINGS_PER_PERIOD];
 }
@@ -50,7 +44,7 @@ function drawGrid(ctx: CanvasRenderingContext2D, W: number, H: number, cx: numbe
   const step = Math.min(W, H) / 16;
   ctx.save();
   ctx.lineWidth = 1.5;
-  ctx.strokeStyle = overlay ? 'rgba(255,255,255,0.42)' : 'rgba(43,58,66,0.30)';
+  ctx.strokeStyle = overlay ? 'rgba(255,255,255,0.38)' : 'rgba(43,58,66,0.28)';
   for (let x = cx % step; x < W; x += step) line(ctx, Math.round(x) + 0.5, 0, Math.round(x) + 0.5, H);
   for (let y = cy % step; y < H; y += step) line(ctx, 0, Math.round(y) + 0.5, W, Math.round(y) + 0.5);
   // Coloured axes through c, so orientation is trackable through the warp.
@@ -62,15 +56,23 @@ function drawGrid(ctx: CanvasRenderingContext2D, W: number, H: number, cx: numbe
   ctx.restore();
 }
 
-function drawPolar(ctx: CanvasRenderingContext2D, W: number, H: number, cx: number, cy: number, S: number, overlay: boolean): void {
-  // Reach past the farthest corner so the rings fill the frame.
+function drawPolar(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  cx: number,
+  cy: number,
+  S: number,
+  overlay: boolean,
+  rPortal?: number
+): void {
   const maxR = Math.hypot(Math.max(cx, W - cx), Math.max(cy, H - cy)) + 4;
   const ratio = Math.pow(Math.max(S, 1.001), 1 / RINGS_PER_PERIOD);
 
   ctx.save();
   // Spokes first (under the rings) — a spoke is a horizontal line in the log.
   ctx.lineWidth = 1.5;
-  ctx.strokeStyle = overlay ? 'rgba(255,255,255,0.45)' : 'rgba(43,58,66,0.28)';
+  ctx.strokeStyle = overlay ? 'rgba(255,255,255,0.42)' : 'rgba(43,58,66,0.26)';
   for (let s = 0; s < 12; s++) {
     const a = (s * Math.PI) / 6;
     line(ctx, cx, cy, cx + Math.cos(a) * maxR, cy + Math.sin(a) * maxR);
@@ -80,10 +82,16 @@ function drawPolar(ctx: CanvasRenderingContext2D, W: number, H: number, cx: numb
   ctx.strokeStyle = overlay ? '#ff6b7a' : RED;
   line(ctx, cx, cy, cx + maxR, cy);
 
-  // Rings, outermost in. Styles cycle every period (×S) → S-invariant, seamless.
-  let r = maxR;
+  // Anchor n=0 to the portal radius (so n % 6 === 0 lands right on the portal
+  // rim and its outer working-frame image), then step outward by ×S to cover maxR.
+  let r = rPortal && rPortal > 4 ? rPortal : maxR;
   let n = 0;
-  while (r > 3) {
+  while (r < maxR) {
+    r *= ratio;
+    n--;
+  }
+
+  while (r > 2.5) {
     const st = ringStyle(n, overlay);
     ctx.lineWidth = st.width;
     ctx.setLineDash(st.dash);
@@ -114,7 +122,8 @@ export function makeSource(
   H: number,
   cx: number,
   cy: number,
-  S: number
+  S: number,
+  rPortal?: number
 ): ImageData {
   const canvas = document.createElement('canvas');
   canvas.width = W;
@@ -125,7 +134,7 @@ export function makeSource(
   if (mode === 'picture' || mode === 'overlay') {
     ctx.drawImage(photo, 0, 0, W, H);
     if (mode === 'overlay') {
-      ctx.fillStyle = 'rgba(18,14,8,0.30)'; // mute the photo so the lines read
+      ctx.fillStyle = 'rgba(18,14,8,0.26)'; // mute the photo slightly so the lines read
       ctx.fillRect(0, 0, W, H);
     }
   } else {
@@ -135,7 +144,7 @@ export function makeSource(
 
   const overlay = mode === 'overlay';
   if (mode === 'grid' || overlay) drawGrid(ctx, W, H, cx, cy, overlay);
-  if (mode === 'polar' || overlay) drawPolar(ctx, W, H, cx, cy, S, overlay);
+  if (mode === 'polar' || overlay) drawPolar(ctx, W, H, cx, cy, S, overlay, rPortal);
 
   return ctx.getImageData(0, 0, W, H);
 }
