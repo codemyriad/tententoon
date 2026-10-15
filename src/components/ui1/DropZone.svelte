@@ -42,15 +42,14 @@
   }
 
   async function trySample() {
-    const url = publicAssetUrl('Droste_1260359-nevit.jpg');
+    const url = publicAssetUrl('contest-hero.webp');
     const r = await loadUrl(url);
     if (r.ok) {
+      doc.shape = 'ellipse';
       setImage(r.image, r.name);
       ui.view = 'split';
-      // Tuned rect for the bundled Droste sample — lands near the
-      // photograph's natural focal point so the spiral preview has a
-      // sensible starting frame instead of a 0×0 rect.
-      commitNewRect({ x: 340, y: 327, w: 595, h: 478 });
+      // Tuned circular portal for the bundled ornate-rim workshop sample.
+      commitNewRect({ x: 378, y: 379, w: 267, h: 267 });
       markSourceLoaded({ kind: 'url', url });
     } else {
       errorMsg = r.reason;

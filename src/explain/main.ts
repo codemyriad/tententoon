@@ -34,8 +34,10 @@ import type { DrosteCtx } from '../lib/math/transforms';
 import { makeSource, type SourceMode } from './patterns';
 import { initPlayground } from './playground';
 
-const SOURCE = '/Droste_1260359-nevit.jpg';
-const PHOTO_NEST: Rect | null = { x: 343.2, y: 334.7, w: 583.5, h: 454.9 };
+import { publicAssetUrl } from '../lib/asset-url';
+
+const SOURCE = publicAssetUrl('contest-hero.webp');
+const PHOTO_NEST: Rect | null = { x: 378, y: 379, w: 267, h: 267 };
 const BOLD_S = 20; // β = atan(ln 20 / 2π) ≈ 25.5°, a hair under Escher's 26°
 
 const TWO_PI = 2 * Math.PI;
@@ -115,7 +117,7 @@ async function main(): Promise<void> {
   // ── Photo geometry (faithful, gentle) ──────────────────────────────────────
   const nest = PHOTO_NEST ?? centeredNest(Wimg, Himg);
   const crop = fitCropToNest({ width: Wimg, height: Himg }, nest, null);
-  const gPhoto = buildPanelGeometry(nest, crop);
+  const gPhoto = buildPanelGeometry(nest, crop, 0);
   if (!gPhoto) {
     showFallback('That nest is degenerate. Pick a smaller rectangle.');
     return;

@@ -37,25 +37,35 @@ async function main() {
   console.log(`smoke @ ${BASE}`);
 
   // 1. The committed example must be served as a real image.
-  const example = await head('/Droste_1260359-nevit.jpg');
+  const example = await head('/contest-hero.webp');
   check(
     'example image is image/*',
     example.status === 200 && example.contentType.startsWith('image/'),
     `got ${example.status} ${example.contentType}`
   );
 
-  // 2. Decode the bytes. A 200 with image/jpeg content-type but corrupted bytes
-  //    would still break the app — check the JPEG SOI marker (FF D8).
+  // 2. Decode the bytes. A 200 with image/webp content-type but corrupted bytes
+  //    would still break the app — check the RIFF....WEBP header.
   try {
-    const res = await fetch(BASE + '/Droste_1260359-nevit.jpg');
+    const res = await fetch(BASE + '/contest-hero.webp');
     const buf = new Uint8Array(await res.arrayBuffer());
+    const isWebp =
+      buf.length >= 12 &&
+      buf[0] === 0x52 && // R
+      buf[1] === 0x49 && // I
+      buf[2] === 0x46 && // F
+      buf[3] === 0x46 && // F
+      buf[8] === 0x57 && // W
+      buf[9] === 0x45 && // E
+      buf[10] === 0x42 && // B
+      buf[11] === 0x50; // P
     check(
-      'example bytes start with JPEG SOI marker',
-      buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xd8,
-      `length=${buf.length}, first bytes=${[...buf.slice(0, 4)].map((b) => b.toString(16)).join(' ')}`
+      'example bytes start with RIFF/WEBP marker',
+      isWebp,
+      `length=${buf.length}, first bytes=${[...buf.slice(0, 12)].map((b) => b.toString(16)).join(' ')}`
     );
   } catch (e) {
-    check('example bytes start with JPEG SOI marker', false, e.message);
+    check('example bytes start with RIFF/WEBP marker', false, e.message);
   }
 
   // 3. The bootstrap effect must stay one-shot. Without the sentinel, an

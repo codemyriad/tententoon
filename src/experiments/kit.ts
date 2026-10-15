@@ -41,11 +41,11 @@ const TWO_PI = 2 * Math.PI;
 const MAX_TEX = 1280;
 
 /** The bundled demo photo (public/) and its known-good nest rectangle —
- *  same values the explainer page uses. S ≈ 2.16, β ≈ 7°. */
-export const DEMO_IMAGE = 'Droste_1260359-nevit.jpg';
-export const DEMO_NEST: Rect = { x: 343.2, y: 334.7, w: 583.5, h: 454.9 };
+ *  same values the explainer page uses. S ≈ 3.84, β ≈ 12.1°. */
+export const DEMO_IMAGE = 'contest-hero.webp';
+export const DEMO_NEST: Rect = { x: 378, y: 379, w: 267, h: 267 };
 /** Alternative demo assets available in public/. */
-export const DEMO_IMAGE_PLAIN = 'pre-droste-nevit.jpg';
+export const DEMO_IMAGE_PLAIN = 'contest-hero.webp';
 export const DEMO_IMAGE_ESCHER = '3b1b-print-gallery.jpg';
 
 export type Geometry = { ctx: DrosteCtx; R0: number; S: number };
@@ -119,7 +119,8 @@ export function buildScene(
     H: crop.h,
     cropX: crop.x,
     cropY: crop.y,
-    sampleScale
+    sampleScale,
+    shapeMorph: reuse?.geom.ctx.shapeMorph ?? 0
   };
   return { img, pixels, nest: n, crop, geom: { ctx, R0: g.rMax / Math.sqrt(g.S), S: g.S } };
 }

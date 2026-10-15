@@ -193,7 +193,7 @@ source.addEventListener('click', async () => {
     source.innerHTML = photograph ? 'Back to the gallery <span aria-hidden="true">↗</span>' : 'Try a photograph <span aria-hidden="true">↗</span>';
     const credit = get('source-credit');
     if (photograph) {
-      credit.innerHTML = 'Photograph: <a href="https://commons.wikimedia.org/wiki/File:Droste_1260359-nevit.jpg" target="_blank" rel="noreferrer">Nevit Dilmen</a> · <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noreferrer">CC BY-SA 3.0</a> · transformed here';
+      credit.textContent = 'Sample: The Celestial & Botanical Workshop · transformed here';
     } else credit.textContent = 'An imaginary gallery. One picture. Infinitely many visits.';
     setScene(next);
   } catch {

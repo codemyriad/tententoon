@@ -32,7 +32,7 @@
   }
 
   async function loadSample() {
-    const r = await loadUrl(publicAssetUrl('Droste_1260359-nevit.jpg'));
+    const r = await loadUrl(publicAssetUrl('contest-hero.webp'));
     if (r.ok) setImage(r.image, r.name);
   }
   async function loadPattern(kind: PatternKind) {
