@@ -188,7 +188,52 @@
     font-weight: 600;
     letter-spacing: -0.01em;
   }
-  header.hero + h2 { margin-top: 1.15em; }
+  header.hero + h2,
+  header.hero + .droste-hook { margin-top: 1.35em; }
+
+  .droste-hook {
+    display: grid;
+    grid-template-columns: 1fr 116px;
+    gap: 22px;
+    align-items: center;
+    margin: 1.35em 0 1.2em;
+  }
+  .droste-hook h2 {
+    margin: 0 0 0.45em;
+  }
+  .droste-hook p {
+    margin: 0 0 0.75em;
+  }
+  .droste-hook p:last-child { margin-bottom: 0; }
+  .droste-tin {
+    margin: 0;
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 7px 7px 6px;
+    box-shadow: 0 8px 22px rgba(25, 18, 10, 0.10);
+    transform: rotate(1.4deg);
+    text-align: center;
+  }
+  .droste-tin img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 4px;
+  }
+  .droste-tin figcaption {
+    margin-top: 5px;
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 10.5px;
+    line-height: 1.3;
+    color: var(--muted);
+  }
+  @media (max-width: 560px) {
+    .droste-hook {
+      grid-template-columns: 1fr 92px;
+      gap: 14px;
+    }
+  }
 
   p { margin: 0 0 1.05em; }
   em { font-style: italic; }
@@ -823,16 +868,28 @@
     </div>
   </header>
 
-  <h2 id="workbench">The four-step spiral machine</h2>
-  <p>
-    A picture nested inside its own round portal repeats every time you zoom by its
-    scale ratio <em>S</em>. Because the complex logarithm stretches the region right
-    around the portal, the <strong>ornate celestial, clockwork &amp; botanical
-    wreath</strong> framing the opening takes center stage: we <strong>unroll</strong>
-    the concentric wreath rings into tall vertical painted friezes with a logarithm,
-    <strong>tilt</strong> the friezes until adjacent copies meet on the diagonal, and
-    <strong>roll them back up</strong> with an exponential into a single spiral.
-  </p>
+  <div class="droste-hook" id="workbench">
+    <div>
+      <h2>What if outside and inside had no border?</h2>
+      <p>
+        A picture that contains a smaller copy of itself is called the
+        <strong>Droste&nbsp;effect</strong>, after the 1904 Dutch cocoa tin whose
+        nurse carries a tray bearing the very same tin. You can fall inward
+        forever &mdash; yet every copy stays fenced inside its own frame, cleanly
+        separating the world outside from the miniature world within.
+      </p>
+      <p>
+        <strong>What if that boundary dissolved?</strong> Follow the painted wreath
+        around the portal below: instead of closing into a separate ring, the frame
+        itself spirals inward, carrying the outer room seamlessly into the smaller
+        room inside it. Here is the four-step machine that weaves them together.
+      </p>
+    </div>
+    <figure class="droste-tin">
+      <img src="../droste-cacao.webp" width="130" height="253" alt="1904 Droste Cacao tin showing a nurse carrying a serving tray with a cup of hot chocolate and a smaller tin bearing the same image." />
+      <figcaption>Droste cocoa tin, 1904</figcaption>
+    </figure>
+  </div>
 
   <div class="pipe-wrap">
     <div class="pipe-toolbar">
